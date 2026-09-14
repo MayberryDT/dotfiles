@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Keep Codex Desktop in sync with Omarchy theme changes.
+set -euo pipefail
+/home/tyler/.local/bin/zet-omarchy-codex-theme
+
+# Same live Chromium policy refresh Omarchy uses for Brave.
+# Codex reads /etc/opt/codex/policies (symlinked to Brave's color.json).
+if pgrep -x ChatGPT >/dev/null; then
+  /usr/bin/chatgpt --refresh-platform-policy --no-startup-window >/dev/null 2>&1 || true
+fi

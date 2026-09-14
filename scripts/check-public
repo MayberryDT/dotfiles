@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+if rg -n --hidden \
+  --glob '!.git/**' \
+  --glob '!scripts/check-public' \
+  '(BEGIN (OPENSSH|RSA|EC|DSA)? ?PRIVATE KEY|github_pat_[A-Za-z0-9_]+|gh[opusr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9]{20,})' .; then
+  echo "Potential credential material found; refusing publication." >&2
+  exit 1
+fi
+
+if rg -n --hidden --glob '!.git/**' \
+  '(/backups/|screen-time/history\.json|todo-list/items\.json|calendar-sync|server-status\.json)' home; then
+  echo "Private or runtime data found; refusing publication." >&2
+  exit 1
+fi
+
+jq empty home/.config/omarchy/shell.json
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  git diff --check
+fi
+echo "Public-content checks passed."

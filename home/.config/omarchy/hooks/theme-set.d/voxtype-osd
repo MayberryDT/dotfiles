@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Keep Voxtype OSD in sync with Omarchy theme changes.
+exec /home/tyler/.local/bin/voxtype-osd-sync-theme

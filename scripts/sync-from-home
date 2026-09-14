@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+source_home="${DOTFILES_SOURCE_HOME:-/home/tyler}"
+dest="$repo_root/home"
+
+mkdir -p "$dest/.config/hypr" "$dest/.config/omarchy" \
+  "$dest/.config/alacritty" "$dest/.config/foot" \
+  "$dest/.config/ghostty" "$dest/.config/kitty" "$dest/.config/btop"
+
+find "$dest/.config/hypr" -mindepth 1 -maxdepth 1 -type f -delete
+for file in "$source_home"/.config/hypr/*.lua "$source_home"/.config/hypr/*.conf; do
+  [[ -f "$file" ]] || continue
+  [[ "$file" == *.bak* || "$file" == *.lock ]] && continue
+  cp -- "$file" "$dest/.config/hypr/"
+done
+
+cp -- "$source_home/.config/omarchy/shell.toml" "$dest/.config/omarchy/shell.toml"
+jq '
+  walk(
+    if type == "object" and .id? == "lifetime.time-visualizer" then del(.birthDate)
+    elif type == "object" and .id? == "quickshell.ytmusic" then del(.searchHistory, .sessionState, .authProfile)
+    elif type == "object" and .id? == "io.github.sirjul1337.lock-explorer" then del(.avatar)
+    else . end
+  )
+' "$source_home/.config/omarchy/shell.json" > "$dest/.config/omarchy/shell.json"
+
+mkdir -p "$dest/.config/omarchy/defaults" "$dest/.config/omarchy/branding" \
+  "$dest/.config/omarchy/extensions" "$dest/.config/omarchy/hooks" \
+  "$dest/.config/omarchy/plugins"
+cp -- "$source_home/.config/omarchy/defaults/agent" "$dest/.config/omarchy/defaults/agent"
+cp -- "$source_home/.config/omarchy/branding/about.txt" "$dest/.config/omarchy/branding/about.txt"
+cp -- "$source_home/.config/omarchy/branding/screensaver.txt" "$dest/.config/omarchy/branding/screensaver.txt"
+cp -- "$source_home/.config/omarchy/extensions/omarchy-menu.jsonc" "$dest/.config/omarchy/extensions/omarchy-menu.jsonc"
+
+find "$dest/.config/omarchy/hooks" -mindepth 1 -delete
+while IFS= read -r -d '' hook; do
+  relative="${hook#"$source_home/.config/omarchy/hooks/"}"
+  [[ "$relative" == *.sample ]] && continue
+  mkdir -p "$dest/.config/omarchy/hooks/$(dirname -- "$relative")"
+  cp -- "$hook" "$dest/.config/omarchy/hooks/$relative"
+done < <(find "$source_home/.config/omarchy/hooks" -type f -print0)
+
+find "$dest/.config/omarchy/plugins" -mindepth 1 -delete
+for plugin in "$source_home"/.config/omarchy/plugins/tyler.*; do
+  [[ -d "$plugin" ]] || continue
+  cp -a -- "$plugin" "$dest/.config/omarchy/plugins/"
+done
+find "$dest/.config/omarchy/plugins" -type f \( -name '*.bak' -o -name '*.bak.*' -o -name '*.pyc' \) -delete
+find "$dest/.config/omarchy/plugins" -type d -name '__pycache__' -prune -exec rm -rf -- {} +
+
+theme="$(basename -- "$(readlink -f -- "$source_home/.config/omarchy/current/theme")")"
+printf '%s\n' "$theme" > "$dest/.config/omarchy/current-theme.txt"
+
+cp -- "$source_home/.config/alacritty/alacritty.toml" "$dest/.config/alacritty/alacritty.toml"
+cp -- "$source_home/.config/foot/foot.ini" "$dest/.config/foot/foot.ini"
+cp -- "$source_home/.config/ghostty/config" "$dest/.config/ghostty/config"
+cp -- "$source_home/.config/kitty/kitty.conf" "$dest/.config/kitty/kitty.conf"
+cp -- "$source_home/.config/btop/btop.conf" "$dest/.config/btop/btop.conf"
+
+"$repo_root/scripts/check-public"

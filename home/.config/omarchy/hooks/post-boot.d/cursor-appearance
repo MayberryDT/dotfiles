@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Keep Cursor Desktop (Glass + workbench) in sync with Omarchy theme changes.
+set -euo pipefail
+exec /home/tyler/.local/bin/zet-omarchy-cursor-theme

@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "idle": {
+    "screensaver": 1800,
+    "lock": 1950
+  },
+  "bar": {
+    "position": "top",
+    "transparent": true,
+    "centerAnchor": "tmn73.calendar",
+    "layout": {
+      "left": [
+        {
+          "id": "io.github.nousd.omamin"
+        },
+        {
+          "id": "tyler.menu"
+        },
+        {
+          "id": "jesseburlamaque.omarchy-find"
+        },
+        {
+          "id": "jankeesvw.workspace-name"
+        }
+      ],
+      "center": [
+        {
+          "id": "omarchy.keyboard-layout"
+        },
+        {
+          "id": "omarchy.media"
+        },
+        {
+          "id": "lifetime.time-visualizer",
+          "defaultMode": "L",
+          "expectedYears": 100,
+          "lifeInputsExpanded": false
+        },
+        {
+          "id": "omarchy.weather"
+        },
+        {
+          "id": "tmn73.calendar",
+          "format": "dddd h:mm AP",
+          "hiddenCalendars": []
+        },
+        {
+          "id": "omarchy.system-update"
+        },
+        {
+          "id": "omarchy.indicators"
+        }
+      ],
+      "right": [
+        {
+          "id": "omarchy.tray"
+        },
+        {
+          "id": "omamail"
+        },
+        {
+          "id": "com.omastorm.radar"
+        },
+        {
+          "id": "io.zet.todo-list"
+        },
+        {
+          "id": "co.animasai.rat-detective"
+        },
+        {
+          "id": "io.zet.codex"
+        },
+        {
+          "id": "omarchy.agents"
+        },
+        {
+          "id": "omarchy.network"
+        },
+        {
+          "id": "omarchy.bluetooth"
+        },
+        {
+          "id": "io.github.nixfred.tailscale-host-monitor"
+        },
+        {
+          "id": "omarchy.audio"
+        },
+        {
+          "id": "omarchy.monitor"
+        },
+        {
+          "id": "omarchy.power"
+        },
+        {
+          "id": "nixfred.ram-pulse",
+          "animated": true,
+          "displayMode": 0
+        },
+        {
+          "id": "jankeesvw.notification-center",
+          "badge": "Dot"
+        }
+      ]
+    },
+    "id": "tyler.bar"
+  },
+  "plugins": [
+    {
+      "id": "quickshell.ytmusic",
+      "idleShutdownMinutes": 15,
+      "showMiniPlayer": "Off",
+      "shortcutPlayer": "Omarchy Music app",
+      "audioQuality": "320 kbps",
+      "authBrowser": "Brave Origin"
+    },
+    {
+      "id": "io.github.sirjul1337.lock-explorer",
+      "design": "editorial",
+      "boot": "theme"
+    },
+    {
+      "id": "b.okomart",
+      "windowMode": "floating"
+    },
+    {
+      "id": "mirador"
+    },
+    {
+      "id": "io.zet.hdmi-status"
+    },
+    {
+      "id": "tyler.notifications"
+    },
+    {
+      "id": "io.zet.workspace-switcher"
+    }
+  ],
+  "disabledPlugins": [
+    "omarchy.lock",
+    "omarchy.notifications",
+    "omarchy.menu"
+  ],
+  "cloneSourceRestores": [
+    "io.github.sirjul1337.lock-explorer",
+    "tyler.notifications",
+    "tyler.menu"
+  ]
+}
