@@ -38,11 +38,11 @@ hl.unbind("SUPER + SHIFT + S")
 -- Replaces the stock Google Maps webapp bind.
 o.bind("SUPER + SHIFT + S", "Snipping tool", "omarchy-capture-screenshot region")
 
--- Mint-style overlay key: a tap of either Super key toggles the Omarchy menu,
--- but using Super as part of another keyboard chord cancels the tap. Hyprland's
--- keyboard event reports XKB keycodes (Left/Right Super = 133/134).
+-- Restore stock Omarchy menu on Super+Space. Super-tap does not open the menu.
+o.bind("SUPER + SPACE", "Omarchy menu", "omarchy-menu toggle")
+
 -- Workspace switcher HUD stays up while Ctrl+Alt or Super+Tab is held, then
--- hides on release. XKB: Ctrl 37/105, Alt 64/108, Tab 23.
+-- hides on release. XKB: Super 133/134, Ctrl 37/105, Alt 64/108, Tab 23.
 local super_keys = { [133] = true, [134] = true }
 local ctrl_keys = { [37] = true, [105] = true }
 local alt_keys = { [64] = true, [108] = true }
@@ -50,7 +50,6 @@ local tab_key = 23
 local super_down = {}
 local ctrl_down = {}
 local alt_down = {}
-local super_tap_armed = false
 local ctrl_alt_switcher_held = false
 local super_switcher_held = false
 
@@ -91,25 +90,17 @@ hl.on("input.keyboard.key", function(keycode, _, state)
 
   if super_keys[keycode] then
     if state == 1 then
-      if next(super_down) == nil then
-        super_tap_armed = true
-      end
       super_down[keycode] = true
     elseif state == 0 then
       super_down[keycode] = nil
       if next(super_down) == nil then
-        if super_tap_armed then
-          hl.exec_cmd("omarchy-menu toggle")
-        end
         if super_switcher_held then
           super_switcher_held = false
           workspace_switcher_hide()
         end
-        super_tap_armed = false
       end
     end
   elseif pressed and next(super_down) ~= nil then
-    super_tap_armed = false
     if keycode == tab_key and not super_switcher_held then
       super_switcher_held = true
       workspace_switcher_hold()
@@ -158,15 +149,15 @@ o.bind("CTRL + ALT + RIGHT", "Next workspace", "/home/tyler/.local/bin/zet-works
 o.bind("CTRL + ALT + SHIFT + LEFT", "Move window to previous workspace", "/home/tyler/.local/bin/zet-workspace-flow left move")
 o.bind("CTRL + ALT + SHIFT + RIGHT", "Move window to next workspace", "/home/tyler/.local/bin/zet-workspace-flow right move")
 
--- Note: SUPER+CTRL+O was previously bound to Toggle menu (Super tap still
--- opens the Omarchy menu). Replaced with the bar to-do list.
+-- Note: SUPER+CTRL+O was previously bound to Toggle menu. Replaced with the
+-- bar to-do list. Super+Space opens the Omarchy menu.
 hl.unbind("SUPER + CTRL + O")
 o.bind("SUPER + CTRL + O", "To-do list", "omarchy-shell -q io.zet.todo-list toggle")
 o.bind("SUPER + CTRL + X", "Post to X", "/home/tyler/.local/bin/zet-x-compose")
 o.bind("SUPER + ALT + X", "HDMI views", "/home/tyler/.local/bin/zet-hdmi-view")
 
 -- Omarchy Find file search overlay. Plugin default is Alt+Space (Spotlight-style).
--- Super+Space stays unbound so Super-tap can still open the Omarchy menu.
+-- Super+Space is the Omarchy menu; Find stays on Alt+Space.
 o.bind("ALT + SPACE", "Find files & folders", "omarchy-shell -q shell toggle jesseburlamaque.omarchy-find '{}'")
 
 
