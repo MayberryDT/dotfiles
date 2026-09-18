@@ -156,9 +156,9 @@ o.bind("SUPER + CTRL + O", "To-do list", "omarchy-shell -q io.zet.todo-list togg
 o.bind("SUPER + CTRL + X", "Post to X", "/home/tyler/.local/bin/zet-x-compose")
 o.bind("SUPER + ALT + X", "HDMI views", "/home/tyler/.local/bin/zet-hdmi-view")
 
--- Omarchy Find file search overlay. Plugin default is Alt+Space (Spotlight-style).
--- Super+Space is the Omarchy menu; Find stays on Alt+Space.
-o.bind("ALT + SPACE", "Find files & folders", "omarchy-shell -q shell toggle jesseburlamaque.omarchy-find '{}'")
+-- File Search overlay (localsearch full-text). Replaces Omarchy Find on Alt+Space.
+-- Super+Space is the Omarchy menu.
+o.bind("ALT + SPACE", "File search", "omarchy-shell -q shell toggle io.github.corck.filesearch '{}'")
 
 
 -- Ibara workstation panel. SUPER+I was free.
