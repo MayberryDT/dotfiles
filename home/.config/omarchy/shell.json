@@ -1,28 +1,8 @@
 {
-  "version": 1,
-  "idle": {
-    "screensaver": 1800,
-    "lock": 1950
-  },
   "bar": {
-    "position": "top",
-    "transparent": true,
     "centerAnchor": "tmn73.calendar",
+    "id": "tyler.bar",
     "layout": {
-      "left": [
-        {
-          "id": "io.github.nousd.omamin"
-        },
-        {
-          "id": "tyler.menu"
-        },
-        {
-          "id": "jesseburlamaque.omarchy-find"
-        },
-        {
-          "id": "jankeesvw.workspace-name"
-        }
-      ],
       "center": [
         {
           "id": "omarchy.keyboard-layout"
@@ -31,18 +11,18 @@
           "id": "omarchy.media"
         },
         {
-          "id": "lifetime.time-visualizer",
           "defaultMode": "L",
           "expectedYears": 100,
+          "id": "lifetime.time-visualizer",
           "lifeInputsExpanded": false
         },
         {
           "id": "omarchy.weather"
         },
         {
-          "id": "tmn73.calendar",
           "format": "dddd h:mm AP",
-          "hiddenCalendars": []
+          "hiddenCalendars": [],
+          "id": "tmn73.calendar"
         },
         {
           "id": "omarchy.system-update"
@@ -51,9 +31,26 @@
           "id": "omarchy.indicators"
         }
       ],
+      "left": [
+        {
+          "id": "jesseburlamaque.omarchy-find"
+        },
+        {
+          "id": "io.github.nousd.omamin"
+        },
+        {
+          "id": "tyler.menu"
+        },
+        {
+          "id": "jankeesvw.workspace-name"
+        }
+      ],
       "right": [
         {
           "id": "omarchy.tray"
+        },
+        {
+          "id": "omaplug"
         },
         {
           "id": "omamail"
@@ -65,13 +62,20 @@
           "id": "io.zet.todo-list"
         },
         {
-          "id": "co.animasai.rat-detective"
-        },
-        {
-          "id": "io.zet.codex"
+          "id": "co.animasai.rat-detective",
+          "alertAssignmentChanges": true,
+          "alertHumanThreshold": 1,
+          "alertsEnabled": true,
+          "appearance": "Rat Detective",
+          "desktopAudio": true,
+          "fullscreen": true,
+          "workspaceEnabled": true
         },
         {
           "id": "omarchy.agents"
+        },
+        {
+          "id": "io.zet.ibara"
         },
         {
           "id": "omarchy.network"
@@ -92,35 +96,38 @@
           "id": "omarchy.power"
         },
         {
-          "id": "nixfred.ram-pulse",
           "animated": true,
-          "displayMode": 0
+          "displayMode": 0,
+          "id": "nixfred.ram-pulse"
         },
         {
-          "id": "jankeesvw.notification-center",
-          "badge": "Dot"
+          "id": "shavanced.notification-center"
         }
       ]
     },
-    "id": "tyler.bar"
+    "position": "top",
+    "transparent": true
+  },
+  "cloneSourceRestores": [
+    "tyler.menu",
+    "tyler.notifications"
+  ],
+  "disabledPlugins": [
+    "omarchy.menu",
+    "omarchy.notifications"
+  ],
+  "idle": {
+    "lock": 1950,
+    "screensaver": 1800
   },
   "plugins": [
     {
+      "audioQuality": "320 kbps",
+      "authBrowser": "Brave Origin",
       "id": "quickshell.ytmusic",
       "idleShutdownMinutes": 15,
-      "showMiniPlayer": "Off",
       "shortcutPlayer": "Omarchy Music app",
-      "audioQuality": "320 kbps",
-      "authBrowser": "Brave Origin"
-    },
-    {
-      "id": "io.github.sirjul1337.lock-explorer",
-      "design": "editorial",
-      "boot": "theme"
-    },
-    {
-      "id": "b.okomart",
-      "windowMode": "floating"
+      "showMiniPlayer": "Off"
     },
     {
       "id": "mirador"
@@ -129,20 +136,14 @@
       "id": "io.zet.hdmi-status"
     },
     {
-      "id": "tyler.notifications"
+      "id": "io.zet.workspace-switcher"
     },
     {
-      "id": "io.zet.workspace-switcher"
+      "id": "bobbynicholas.omaland"
+    },
+    {
+      "id": "tyler.notifications"
     }
   ],
-  "disabledPlugins": [
-    "omarchy.lock",
-    "omarchy.notifications",
-    "omarchy.menu"
-  ],
-  "cloneSourceRestores": [
-    "io.github.sirjul1337.lock-explorer",
-    "tyler.notifications",
-    "tyler.menu"
-  ]
+  "version": 1
 }

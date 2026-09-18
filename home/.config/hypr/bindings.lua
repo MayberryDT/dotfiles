@@ -170,6 +170,10 @@ o.bind("SUPER + ALT + X", "HDMI views", "/home/tyler/.local/bin/zet-hdmi-view")
 o.bind("ALT + SPACE", "Find files & folders", "omarchy-shell -q shell toggle jesseburlamaque.omarchy-find '{}'")
 
 
+-- Ibara workstation panel. SUPER+I was free.
+o.bind("SUPER + I", "Ibara", "omarchy-shell -q shell toggle io.zet.ibara '{}'")
+
+
 -- strata-installer: file-manager start
 hl.unbind("SUPER + SHIFT + F")
 hl.unbind("SUPER + ALT + SHIFT + F")
