@@ -10,6 +10,7 @@ import qs.Commons
 
 import "components"
 import "NotificationLogic.js" as NotificationLogic
+import "ServiceBridge.js" as ServiceBridge
 
 Item {
   id: service
@@ -94,6 +95,10 @@ Item {
   // How many notifications the history directory keeps, and therefore how
   // many `showHistory` can replay.
   readonly property int historyLimit: 10
+  // Live inbox cap when toasts are hidden and nothing auto-expires.
+  readonly property int liveLimit: 30
+  // Notifications belong in the bar inbox. On-screen toasts stay off.
+  readonly property bool showToasts: false
 
   readonly property int lowPopupDuration: 5000
   readonly property int normalPopupDuration: 8000
@@ -183,6 +188,7 @@ Item {
     Qt.callLater(function() {
       removePopupsByOriginalId(snapshot.originalId, NotificationLogic.popupFileName(snapshot))
       popupModel.insert(0, snapshot)
+      service.capLivePopups()
       // An update that arrived while the insert was deferred found no row to
       // write to, and a property that already changed will not change again.
       // Reading the object once the row exists catches up on it.
@@ -343,6 +349,11 @@ Item {
 
   function clearPopups() {
     while (popupModel.count > 0) dismissPopup(0)
+  }
+
+  function capLivePopups() {
+    while (popupModel.count > service.liveLimit)
+      service.expirePopup(popupModel.count - 1)
   }
 
   // Run the popup's click action, then dismiss. Omarchy's own toasts carry the
@@ -718,7 +729,9 @@ Item {
     for (var i = 0; i < entries.length; i++) {
       var entry = entries[i]
       var duration = durationFor(entry.urgency, entry.expireTimeout)
-      if (NotificationLogic.popupExpired(entry, duration, now)) {
+      // Hidden toasts are inbox items. Keep them live across restarts until
+      // dismissed from the bar, instead of archiving as if they timed out.
+      if (service.showToasts && NotificationLogic.popupExpired(entry, duration, now)) {
         // It would have expired on screen had the shell kept running, so it
         // gets archived exactly like an expiry that happened while it did.
         archivePopupFileFor(entry)
@@ -767,6 +780,7 @@ Item {
         popupModel.append(restored)
       }
     })
+    service.capLivePopups()
   }
 
   // ---------------------------------------------------- settings persistence
@@ -825,7 +839,10 @@ Item {
     settingsFile.setText(JSON.stringify({ version: 3, dnd: persisted.doNotDisturb }, null, 2) + "\n")
   }
 
+  Component.onDestruction: ServiceBridge.clear(service)
+
   Component.onCompleted: {
+    ServiceBridge.publish(service)
     ensureDirsProc.running = true
     // Once mkdir has had a tick, load the existing settings file. FileView
     // surfaces an empty string when the file doesn't exist; loadSettings
@@ -950,7 +967,7 @@ Item {
       required property var modelData
       screen: modelData
       readonly property bool hdmiOutput: String((modelData && modelData.name) || "").indexOf("HDMI") === 0
-      visible: popupModel.count > 0 && !hdmiOutput
+      visible: service.showToasts && popupModel.count > 0 && !hdmiOutput
 
       WlrLayershell.namespace: "omarchy-notifications"
       WlrLayershell.layer: WlrLayer.Overlay
@@ -1006,7 +1023,7 @@ Item {
 
             readonly property real lifetime: service.durationFor(cardSlot.urgency, cardSlot.expireTimeout)
             property real remainingLifetime: 1.0
-            readonly property bool ticking: cardSlot.lifetime > 0 && !card.hovered
+            readonly property bool ticking: service.showToasts && cardSlot.lifetime > 0 && !card.hovered
 
             // A client updating this notification in place rewrites the row
             // under the card (see refreshPopup). New text deserves a full look,
