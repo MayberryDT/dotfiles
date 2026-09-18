@@ -16,6 +16,7 @@ BarWidget {
   moduleName: "tyler.notifications"
 
   property bool popupOpen: false
+  readonly property bool opened: popupOpen
   function open() { popupOpen = true }
   function close() { popupOpen = false }
   function toggle() { popupOpen = !popupOpen }
@@ -59,8 +60,12 @@ BarWidget {
     }
   }
 
-  readonly property int liveCount: notificationService && notificationService.popupModel
-    ? notificationService.popupModel.count : 0
+  readonly property int liveCount: {
+    var service = notificationService
+    if (!service) return 0
+    if (typeof service.unreadCount === "number") return service.unreadCount
+    return service.popupModel ? service.popupModel.count : 0
+  }
   readonly property string historyDir: notificationService && notificationService.historyDir
     ? String(notificationService.historyDir) : ""
 
@@ -75,8 +80,8 @@ BarWidget {
 
   readonly property string icon: {
     if (root.dndOn) return "󰂛"
-    if (root.liveCount > 0) return "󱅫"
-    return "󰂚"
+    if (root.liveCount <= 0) return "󰂚"
+    return "󱅫" + (root.liveCount > 9 ? "9+" : String(root.liveCount))
   }
 
   // Theme palette (mirrors the old widget's tokens).

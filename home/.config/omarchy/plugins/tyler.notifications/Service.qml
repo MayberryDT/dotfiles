@@ -99,6 +99,7 @@ Item {
   readonly property int liveLimit: 30
   // Notifications belong in the bar inbox. On-screen toasts stay off.
   readonly property bool showToasts: false
+  readonly property int unreadCount: popupModel.count
 
   readonly property int lowPopupDuration: 5000
   readonly property int normalPopupDuration: 8000
@@ -960,7 +961,7 @@ Item {
   // from the focused application.
 
   Variants {
-    model: Quickshell.screens
+    model: service.showToasts ? Quickshell.screens : []
 
     PanelWindow {
       id: popupWindow
