@@ -50,7 +50,12 @@ done
 find "$dest/.config/omarchy/plugins" -type f \( -name '*.bak' -o -name '*.bak.*' -o -name '*.pyc' \) -delete
 find "$dest/.config/omarchy/plugins" -type d -name '__pycache__' -prune -exec rm -rf -- {} +
 
-theme="$(basename -- "$(readlink -f -- "$source_home/.config/omarchy/current/theme")")"
+theme_name_file="$source_home/.local/state/omarchy/current/theme.name"
+if [[ -f "$theme_name_file" ]]; then
+  theme="$(<"$theme_name_file")"
+else
+  theme="$(basename -- "$(readlink -f -- "$source_home/.config/omarchy/current/theme")")"
+fi
 printf '%s\n' "$theme" > "$dest/.config/omarchy/current-theme.txt"
 
 cp -- "$source_home/.config/alacritty/alacritty.toml" "$dest/.config/alacritty/alacritty.toml"
