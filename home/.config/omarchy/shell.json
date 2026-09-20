@@ -96,9 +96,9 @@
           "id": "omarchy.power"
         },
         {
-          "animated": true,
-          "displayMode": 0,
-          "id": "nixfred.ram-pulse"
+          "id": "nixfred.pulse",
+          "barSource": "ram",
+          "cpu.displayMode": 0
         },
         {
           "id": "tyler.notifications"
