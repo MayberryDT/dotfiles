@@ -21,5 +21,6 @@ for workspace = 1, 10 do
     workspace = tostring(workspace),
     monitor = "eDP-2",
     default = (workspace == 1),
+    layout = "dwindle",
   })
 end

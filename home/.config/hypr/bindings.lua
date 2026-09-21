@@ -32,6 +32,10 @@ hl.unbind("SUPER + CTRL + X")
 hl.unbind("SUPER + SHIFT + CTRL + A")
 hl.unbind("SUPER + SPACE")
 hl.unbind("SUPER + SHIFT + S")
+-- Keep every workspace on the standard tiled layout. The stock Super+L
+-- toggle can strand an existing workspace in scrolling mode even after it
+-- saves "dwindle" for the next session.
+hl.unbind("SUPER + L")
 
 -- Windows Snipping Tool muscle memory: select a region, copy to clipboard,
 -- and save into ~/Pictures/Screenshots. Print Screen uses the same folder.
