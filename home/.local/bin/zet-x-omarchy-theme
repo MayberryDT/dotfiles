@@ -60,6 +60,18 @@ div[role="dialog"], div[role="menu"], [role="listbox"],
   color: var(--zet-x-fg) !important;
   background-color: var(--zet-x-bg) !important;
 }}
+/* X paints the post header and right rail with opaque stock-white nested divs.
+   Let the themed column show through instead of leaving rectangular patches. */
+#react-root [data-testid="primaryColumn"] > div:first-child > div:first-child,
+#react-root [data-testid="primaryColumn"] > div:first-child > div:first-child div {{
+  background-color: var(--zet-x-bg) !important;
+}}
+#react-root [data-testid="sidebarColumn"] div {{
+  background-color: transparent !important;
+}}
+#react-root [data-testid="sidebarColumn"] [data-testid="SearchBox_Search_Input"] {{
+  background-color: var(--zet-x-surface) !important;
+}}
 div[role="dialog"] [data-testid="tweetTextarea_0"],
 input, textarea, [contenteditable="true"] {{
   color: var(--zet-x-fg) !important;
