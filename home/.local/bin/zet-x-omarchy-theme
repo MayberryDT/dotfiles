@@ -93,8 +93,10 @@ html, body, #react-root {{
 #react-root :is([data-testid="like"], [data-testid="unlike"]):hover {{
   background-color: color-mix(in srgb, var(--zet-x-like) 10%, transparent) !important;
 }}
-/* The animated heart is a colored sprite, not currentColor text. */
-#react-root :is([data-testid="like"], [data-testid="unlike"]) :is([style*="background-image"], canvas) {{
+/* Tint the complete active control: X can paint burst particles in separate
+   descendants, pseudo-elements, or class-backed images. Preserve their alpha. */
+#react-root [data-testid="unlike"],
+#react-root [data-testid="like"]:is(:hover, :active) {{
   filter: url("{like_filter}") !important;
 }}
 /* Limit painting to the actual launcher, never its anonymous parent container. */
@@ -153,7 +155,18 @@ for prop, groups in stock.items():
         css += ",\n".join(selectors) + f" {{ {prop}: {value} !important; }}\n"
 
 # Semantic surfaces override the generic inline-color mappings above.
-css += '\n#react-root [role="tablist"] { background-color: var(--zet-x-bg) !important; }\n'
+css += """
+/* The post-detail page has a back/title header rather than a tablist.
+   Paint only its outer header surface, never all nested divs. */
+#react-root [data-testid="primaryColumn"] > div:first-child > div:first-child,
+#react-root [role="tablist"],
+#react-root [role="tablist"] :is(button, [role="button"]),
+#react-root :is(div, nav):has(> [role="tablist"]) > :not([role="tablist"]),
+#react-root :is(div, nav):has(> [role="tablist"]) > :not([role="tablist"]) :is(button, a, [role="button"]),
+#react-root [data-testid="primaryColumn"] :is(button, a, [role="button"]):is([aria-label="Add"], [aria-label="Add a column"], [aria-label="Add timeline"]) {
+  background-color: var(--zet-x-bg) !important;
+}
+"""
 
 output.parent.mkdir(parents=True, exist_ok=True)
 temp = output.with_name(".palette.css.tmp")
