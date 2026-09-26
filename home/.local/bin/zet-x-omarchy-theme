@@ -2,6 +2,7 @@
 """Write the active Omarchy palette as CSS for the local X extension."""
 
 import os
+import base64
 import json
 from pathlib import Path
 import re
@@ -40,6 +41,15 @@ def readable_on(hex_color):
     luminance = sum(a * b for a, b in zip(linear, (0.2126, 0.7152, 0.0722)))
     return "#171717" if luminance > 0.179 else "#FFFFFF"
 
+
+# Recolor the raster like-animation sprite while preserving its alpha and frames.
+red, green, blue = (int(like[i:i + 2], 16) / 255 for i in (1, 3, 5))
+like_filter_svg = (
+    '<svg xmlns="http://www.w3.org/2000/svg"><filter id="tint" color-interpolation-filters="sRGB">'
+    f'<feColorMatrix type="matrix" values="0 0 0 0 {red} 0 0 0 0 {green} 0 0 0 0 {blue} 0 0 0 1 0"/>'
+    '</filter></svg>'
+)
+like_filter = "data:image/svg+xml;base64," + base64.b64encode(like_filter_svg.encode()).decode() + "#tint"
 
 css = f"""/* Generated from the active Omarchy theme. */
 :root {{
@@ -83,6 +93,17 @@ html, body, #react-root {{
 #react-root :is([data-testid="like"], [data-testid="unlike"]):hover {{
   background-color: color-mix(in srgb, var(--zet-x-like) 10%, transparent) !important;
 }}
+/* The animated heart is a colored sprite, not currentColor text. */
+#react-root :is([data-testid="like"], [data-testid="unlike"]) :is([style*="background-image"], canvas) {{
+  filter: url("{like_filter}") !important;
+}}
+/* Limit painting to the actual launcher, never its anonymous parent container. */
+#react-root :is(button, [role="button"]):is([aria-label="Grok"], [aria-label="Chat"],
+[aria-label="Open Grok"], [aria-label="Open chat"], [aria-label="Messages"]),
+#react-root [data-testid="DMDrawer"] {{
+  background-color: var(--zet-x-bg) !important;
+  border-color: var(--zet-x-border) !important;
+}}
 /* Atomic classes also cover already-open pages until the new script loads. */
 #react-root .r-14lw9ot, #react-root .r-kemksi,
 #react-root .r-5zmot {{ background-color: var(--zet-x-bg) !important; }}
@@ -94,9 +115,10 @@ html, body, #react-root {{
 # Inline React colors are separate from the stylesheet rules handled by theme.js.
 stock = {
     "background-color": {
-        "bg": ["rgb(255, 255, 255)", "rgb(0, 0, 0)", "rgb(21, 32, 43)"],
+        "bg": ["rgb(255, 255, 255)", "rgb(0, 0, 0)", "rgb(21, 32, 43)", "rgb(249, 249, 249)", "rgb(250, 250, 250)"],
         "surface": ["rgb(247, 249, 249)", "rgb(239, 243, 244)", "rgb(32, 35, 39)", "rgb(22, 24, 28)"],
         "hover": ["rgb(230, 236, 240)", "rgb(239, 239, 239)", "rgb(26, 26, 26)"],
+        "like": ["rgba(249, 24, 128, 0.1)", "rgba(224, 36, 94, 0.1)"],
         "accent": ["rgb(29, 155, 240)", "rgb(29, 161, 242)", "rgb(0, 153, 255)"],
     },
     "color": {
@@ -109,6 +131,10 @@ stock = {
         "border": ["rgb(239, 243, 244)", "rgb(207, 217, 222)", "rgb(47, 51, 54)", "rgb(56, 68, 77)"],
     },
 }
+for alpha in ("0.8", "0.85", "0.9", "0.95"):
+    stock["background-color"][f"bg-alpha-{alpha}"] = [
+        f"rgba({rgb}, {alpha})" for rgb in ("255, 255, 255", "0, 0, 0", "21, 32, 43")
+    ]
 for prop, groups in stock.items():
     for token, values in groups.items():
         selectors = []
@@ -118,7 +144,16 @@ for prop, groups in stock.items():
                 for prefix in ("", ";", "; "):
                     operator = "^=" if not prefix else "*="
                     selectors.append(f'#react-root [style{operator}"{prefix}{declaration}"]')
-        css += ",\n".join(selectors) + f" {{ {prop}: var(--zet-x-{token}) !important; }}\n"
+        value = f"var(--zet-x-{token})"
+        if token.startswith("bg-alpha-"):
+            alpha = float(token.removeprefix("bg-alpha-")) * 100
+            value = f"color-mix(in srgb, var(--zet-x-bg) {alpha}%, transparent)"
+        elif token == "like" and prop == "background-color":
+            value = "color-mix(in srgb, var(--zet-x-like) 10%, transparent)"
+        css += ",\n".join(selectors) + f" {{ {prop}: {value} !important; }}\n"
+
+# Semantic surfaces override the generic inline-color mappings above.
+css += '\n#react-root [role="tablist"] { background-color: var(--zet-x-bg) !important; }\n'
 
 output.parent.mkdir(parents=True, exist_ok=True)
 temp = output.with_name(".palette.css.tmp")
