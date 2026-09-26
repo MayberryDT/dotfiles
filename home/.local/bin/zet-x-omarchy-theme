@@ -52,116 +52,62 @@ css = f"""/* Generated from the active Omarchy theme. */
   --zet-x-accent-fg: {readable_on(accent)};
   --zet-x-border: {border};
 }}
-html, body, #react-root, #react-root > div {{
+/* Palette only: never paint descendants or change geometry. */
+html, body, #react-root {{
   color: var(--zet-x-fg) !important;
   background-color: var(--zet-x-bg) !important;
 }}
-body, [data-testid="primaryColumn"], [data-testid="sidebarColumn"],
-header[role="banner"], [data-testid="cellInnerDiv"],
-[data-testid="DMDrawer"], [data-testid="BottomBar"],
-div[role="dialog"], div[role="menu"], [role="listbox"],
-[data-testid="sheetDialog"] {{
-  color: var(--zet-x-fg) !important;
-  background-color: var(--zet-x-bg) !important;
-}}
-/* X paints the post header and right rail with opaque stock-white nested divs.
-   Let the themed column show through instead of leaving rectangular patches. */
-#react-root [data-testid="primaryColumn"] > div:first-child > div:first-child,
-#react-root [data-testid="primaryColumn"] > div:first-child > div:first-child div {{
-  background-color: var(--zet-x-bg) !important;
-}}
-#react-root [data-testid="sidebarColumn"] div {{
-  background-color: transparent !important;
-}}
-#react-root [data-testid="sidebarColumn"] [data-testid="SearchBox_Search_Input"] {{
-  background-color: var(--zet-x-surface) !important;
-}}
-/* Search, composer and timeline tabs have stock white/grey wrappers. */
-#react-root [data-testid="sidebarColumn"] div:has(> [data-testid="SearchBox_Search_Input"]),
-#react-root [data-testid="sidebarColumn"] div:has(> div > [data-testid="SearchBox_Search_Input"]) {{
-  background-color: var(--zet-x-surface) !important;
-  border-radius: 9999px !important;
-}}
-#react-root [data-testid="primaryColumn"] div:has(> [data-testid="toolBar"]),
-#react-root [data-testid="primaryColumn"] div:has(> div > [data-testid="toolBar"]),
-#react-root [data-testid="primaryColumn"] [data-testid="toolBar"],
-#react-root [data-testid="primaryColumn"] [data-testid="toolBar"] div {{
-  background-color: var(--zet-x-bg) !important;
-}}
-#react-root [data-testid="primaryColumn"] [role="tablist"],
-#react-root [data-testid="primaryColumn"] [role="tab"],
-#react-root [data-testid="primaryColumn"] [role="tab"] div {{
-  background-color: transparent !important;
-  border-color: var(--zet-x-border) !important;
-}}
-div[role="dialog"] [data-testid="tweetTextarea_0"],
-input, textarea, [contenteditable="true"] {{
+#react-root :is(input, textarea, [contenteditable="true"]) {{
   color: var(--zet-x-fg) !important;
   caret-color: var(--zet-x-accent) !important;
 }}
 ::selection {{ color: {selection_text}; background: {selection}; }}
-a[href*="/hashtag/"], a[href^="https://t.co/"] {{ color: var(--zet-x-link) !important; }}
-/* X's default bright blue is used for links, prompts, and verified badges. */
-#react-root [class*="r-1cvl2hr"],
-#react-root [data-zet-x-link],
-#react-root [data-testid="icon-verified"],
-#react-root svg[aria-label="Verified account"] {{ color: var(--zet-x-link) !important; }}
-#react-root [data-testid="icon-verified"] path:first-child,
-#react-root svg[aria-label="Verified account"] path:first-child {{
-  fill: var(--zet-x-link) !important;
-}}
-[data-testid="primaryColumn"] > div, [data-testid="cellInnerDiv"],
-[data-testid="sidebarColumn"] > div, header[role="banner"],
-[role="dialog"], [role="menu"], [role="listbox"] {{
-  border-color: var(--zet-x-border) !important;
-}}
-[data-testid="SearchBox_Search_Input"],
-[data-testid="typeaheadRecentSearches"], [data-testid="toolBar"],
-[data-testid="HoverCard"], [data-testid="card.wrapper"] {{
-  color: var(--zet-x-fg) !important;
-  background-color: var(--zet-x-surface) !important;
-}}
-[data-testid="tweetButton"], [data-testid="tweetButtonInline"],
-[data-testid="SideNav_NewTweet_Button"] {{
-  color: var(--zet-x-accent-fg) !important;
+#react-root :is([data-testid="tweetButton"], [data-testid="tweetButtonInline"],
+[data-testid="SideNav_NewTweet_Button"]) {{
   background-color: var(--zet-x-accent) !important;
+  color: var(--zet-x-accent-fg) !important;
 }}
-[data-testid="cellInnerDiv"]:hover, [role="menuitem"]:hover {{
-  background-color: var(--zet-x-hover) !important;
+#react-root :is([data-testid="tweetButton"], [data-testid="tweetButtonInline"],
+[data-testid="SideNav_NewTweet_Button"]) :is(div, span, svg) {{
+  color: inherit !important;
 }}
-/* The fixed Grok/chat launchers use their own untinted white cards. */
-#react-root [data-testid="DMDrawer"],
-#react-root [data-testid*="GrokDrawer"],
-#react-root [data-zet-x-floating],
-#react-root :is(button, [role="button"])[aria-label="Grok"],
-#react-root :is(button, [role="button"])[aria-label="Chat"] {{
-  color: var(--zet-x-fg) !important;
-  background-color: var(--zet-x-surface) !important;
-  border-color: var(--zet-x-border) !important;
-  box-shadow: 0 2px 9px color-mix(in srgb, var(--zet-x-fg) 12%, transparent) !important;
-}}
-/* X puts its stock palette on many anonymous layout nodes. Match those
-   exact values so media, profile images, and custom post colors stay intact. */
-[style*="background-color: rgb(0, 0, 0)"],
-[style*="background-color: rgb(255, 255, 255)"],
-[style*="background-color: rgb(21, 32, 43)"] {{
-  background-color: var(--zet-x-bg) !important;
-}}
-[style*="background-color: rgb(32, 35, 39)"],
-[style*="background-color: rgb(239, 243, 244)"] {{
-  background-color: var(--zet-x-surface) !important;
-}}
-span[style*="color: rgb(231, 233, 234)"],
-span[style*="color: rgb(15, 20, 25)"],
-[dir="auto"][style*="color: rgb(231, 233, 234)"],
-[dir="auto"][style*="color: rgb(15, 20, 25)"] {{ color: var(--zet-x-fg) !important; }}
-span[style*="color: rgb(113, 118, 123)"],
-span[style*="color: rgb(139, 152, 165)"] {{ color: var(--zet-x-muted) !important; }}
-span[style*="color: rgb(29, 155, 240)"],
-a[style*="color: rgb(29, 155, 240)"] {{ color: var(--zet-x-link) !important; }}
-[data-testid="tweetButton"] *, [data-testid="tweetButtonInline"] *,
-[data-testid="SideNav_NewTweet_Button"] * {{ color: inherit !important; }}
+#react-root :is(a[href*="/hashtag/"], a[href^="https://t.co/"],
+[data-testid="icon-verified"]) {{ color: var(--zet-x-link) !important; }}
+/* Atomic classes also cover already-open pages until the new script loads. */
+#react-root .r-14lw9ot, #react-root .r-kemksi,
+#react-root .r-5zmot {{ background-color: var(--zet-x-bg) !important; }}
+#react-root .r-1cvl2hr {{ color: var(--zet-x-link) !important; }}
+#react-root .r-1vtznih, #react-root .r-l5o3uw {{ background-color: var(--zet-x-accent) !important; }}
+
 """
+
+# Inline React colors are separate from the stylesheet rules handled by theme.js.
+stock = {
+    "background-color": {
+        "bg": ["rgb(255, 255, 255)", "rgb(0, 0, 0)", "rgb(21, 32, 43)"],
+        "surface": ["rgb(247, 249, 249)", "rgb(239, 243, 244)", "rgb(32, 35, 39)", "rgb(22, 24, 28)"],
+        "hover": ["rgb(230, 236, 240)", "rgb(239, 239, 239)", "rgb(26, 26, 26)"],
+        "accent": ["rgb(29, 155, 240)", "rgb(29, 161, 242)", "rgb(0, 153, 255)"],
+    },
+    "color": {
+        "fg": ["rgb(15, 20, 25)", "rgb(231, 233, 234)", "rgb(217, 217, 217)"],
+        "muted": ["rgb(83, 100, 113)", "rgb(113, 118, 123)", "rgb(139, 152, 165)"],
+        "link": ["rgb(29, 155, 240)", "rgb(29, 161, 242)", "rgb(0, 153, 255)"],
+    },
+    "border-color": {
+        "border": ["rgb(239, 243, 244)", "rgb(207, 217, 222)", "rgb(47, 51, 54)", "rgb(56, 68, 77)"],
+    },
+}
+for prop, groups in stock.items():
+    for token, values in groups.items():
+        selectors = []
+        for value in values:
+            for spacing in ("", " "):
+                declaration = f"{prop}:{spacing}{value}"
+                for prefix in ("", ";", "; "):
+                    operator = "^=" if not prefix else "*="
+                    selectors.append(f'#react-root [style{operator}"{prefix}{declaration}"]')
+        css += ",\n".join(selectors) + f" {{ {prop}: var(--zet-x-{token}) !important; }}\n"
 
 output.parent.mkdir(parents=True, exist_ok=True)
 temp = output.with_name(".palette.css.tmp")
