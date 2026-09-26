@@ -63,8 +63,10 @@ cp -- "$source_home/.config/foot/foot.ini" "$dest/.config/foot/foot.ini"
 cp -- "$source_home/.config/ghostty/config" "$dest/.config/ghostty/config"
 cp -- "$source_home/.config/kitty/kitty.conf" "$dest/.config/kitty/kitty.conf"
 cp -- "$source_home/.config/btop/btop.conf" "$dest/.config/btop/btop.conf"
+cp -- "$source_home/.config/brave-origin-flags.conf" "$dest/.config/brave-origin-flags.conf"
 
-# X webapp Omarchy palette integration. The generated palette.css is runtime state.
+# X webapp Omarchy palette integration. Generated palette.css and browser theme
+# manifest are runtime state derived from the active theme.
 mkdir -p "$dest/.local/bin" "$dest/.local/share/zet-x-compose/extension"
 cp -- "$source_home/.local/bin/zet-x-omarchy-theme" "$dest/.local/bin/zet-x-omarchy-theme"
 for file in manifest.json theme.js compose.css compose.js pwa.js; do

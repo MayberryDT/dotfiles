@@ -2,12 +2,14 @@
 """Write the active Omarchy palette as CSS for the local X extension."""
 
 import os
+import json
 from pathlib import Path
 import re
 import tomllib
 
 theme = Path.home() / ".local/state/omarchy/current/theme/colors.toml"
 output = Path.home() / ".local/share/zet-x-compose/extension/palette.css"
+browser_theme = Path.home() / ".local/share/zet-x-compose/browser-theme/manifest.json"
 colors = tomllib.loads(theme.read_text())
 
 
@@ -25,6 +27,7 @@ hover = color("darker_background" if light else "lighter_background", surface)
 foreground = color("foreground", "#171717" if light else "#F7F9F9")
 muted = color("dark_foreground", foreground)
 accent = color("accent", foreground)
+link = color("blue", accent)
 border = color("muted", hover)
 selection = color("selection_background", hover)
 selection_text = color("selection_foreground", foreground)
@@ -45,6 +48,7 @@ css = f"""/* Generated from the active Omarchy theme. */
   --zet-x-fg: {foreground};
   --zet-x-muted: {muted};
   --zet-x-accent: {accent};
+  --zet-x-link: {link};
   --zet-x-accent-fg: {readable_on(accent)};
   --zet-x-border: {border};
 }}
@@ -72,13 +76,40 @@ div[role="dialog"], div[role="menu"], [role="listbox"],
 #react-root [data-testid="sidebarColumn"] [data-testid="SearchBox_Search_Input"] {{
   background-color: var(--zet-x-surface) !important;
 }}
+/* Search, composer and timeline tabs have stock white/grey wrappers. */
+#react-root [data-testid="sidebarColumn"] div:has(> [data-testid="SearchBox_Search_Input"]),
+#react-root [data-testid="sidebarColumn"] div:has(> div > [data-testid="SearchBox_Search_Input"]) {{
+  background-color: var(--zet-x-surface) !important;
+  border-radius: 9999px !important;
+}}
+#react-root [data-testid="primaryColumn"] div:has(> [data-testid="toolBar"]),
+#react-root [data-testid="primaryColumn"] div:has(> div > [data-testid="toolBar"]),
+#react-root [data-testid="primaryColumn"] [data-testid="toolBar"],
+#react-root [data-testid="primaryColumn"] [data-testid="toolBar"] div {{
+  background-color: var(--zet-x-bg) !important;
+}}
+#react-root [data-testid="primaryColumn"] [role="tablist"],
+#react-root [data-testid="primaryColumn"] [role="tab"],
+#react-root [data-testid="primaryColumn"] [role="tab"] div {{
+  background-color: transparent !important;
+  border-color: var(--zet-x-border) !important;
+}}
 div[role="dialog"] [data-testid="tweetTextarea_0"],
 input, textarea, [contenteditable="true"] {{
   color: var(--zet-x-fg) !important;
   caret-color: var(--zet-x-accent) !important;
 }}
 ::selection {{ color: {selection_text}; background: {selection}; }}
-a[href*="/hashtag/"], a[href^="https://t.co/"] {{ color: var(--zet-x-accent) !important; }}
+a[href*="/hashtag/"], a[href^="https://t.co/"] {{ color: var(--zet-x-link) !important; }}
+/* X's default bright blue is used for links, prompts, and verified badges. */
+#react-root [class*="r-1cvl2hr"],
+#react-root [data-zet-x-link],
+#react-root [data-testid="icon-verified"],
+#react-root svg[aria-label="Verified account"] {{ color: var(--zet-x-link) !important; }}
+#react-root [data-testid="icon-verified"] path:first-child,
+#react-root svg[aria-label="Verified account"] path:first-child {{
+  fill: var(--zet-x-link) !important;
+}}
 [data-testid="primaryColumn"] > div, [data-testid="cellInnerDiv"],
 [data-testid="sidebarColumn"] > div, header[role="banner"],
 [role="dialog"], [role="menu"], [role="listbox"] {{
@@ -98,6 +129,17 @@ a[href*="/hashtag/"], a[href^="https://t.co/"] {{ color: var(--zet-x-accent) !im
 [data-testid="cellInnerDiv"]:hover, [role="menuitem"]:hover {{
   background-color: var(--zet-x-hover) !important;
 }}
+/* The fixed Grok/chat launchers use their own untinted white cards. */
+#react-root [data-testid="DMDrawer"],
+#react-root [data-testid*="GrokDrawer"],
+#react-root [data-zet-x-floating],
+#react-root :is(button, [role="button"])[aria-label="Grok"],
+#react-root :is(button, [role="button"])[aria-label="Chat"] {{
+  color: var(--zet-x-fg) !important;
+  background-color: var(--zet-x-surface) !important;
+  border-color: var(--zet-x-border) !important;
+  box-shadow: 0 2px 9px color-mix(in srgb, var(--zet-x-fg) 12%, transparent) !important;
+}}
 /* X puts its stock palette on many anonymous layout nodes. Match those
    exact values so media, profile images, and custom post colors stay intact. */
 [style*="background-color: rgb(0, 0, 0)"],
@@ -116,7 +158,7 @@ span[style*="color: rgb(15, 20, 25)"],
 span[style*="color: rgb(113, 118, 123)"],
 span[style*="color: rgb(139, 152, 165)"] {{ color: var(--zet-x-muted) !important; }}
 span[style*="color: rgb(29, 155, 240)"],
-a[style*="color: rgb(29, 155, 240)"] {{ color: var(--zet-x-accent) !important; }}
+a[style*="color: rgb(29, 155, 240)"] {{ color: var(--zet-x-link) !important; }}
 [data-testid="tweetButton"] *, [data-testid="tweetButtonInline"] *,
 [data-testid="SideNav_NewTweet_Button"] * {{ color: inherit !important; }}
 """
@@ -125,3 +167,35 @@ output.parent.mkdir(parents=True, exist_ok=True)
 temp = output.with_name(".palette.css.tmp")
 temp.write_text(css)
 os.replace(temp, output)
+
+
+def rgb(value):
+    return [int(value[i : i + 2], 16) for i in (1, 3, 5)]
+
+
+# Browser chrome is separate from the X page. A Chrome theme colors its tabs,
+# toolbar and address field after Brave next loads the unpacked theme extension.
+browser_theme.parent.mkdir(parents=True, exist_ok=True)
+manifest = {
+    "manifest_version": 3,
+    "version": "1.0.0",
+    "name": "Omarchy browser chrome",
+    "theme": {
+        "colors": {
+            "frame": rgb(color("darker_background", background)),
+            "frame_inactive": rgb(color("dark_background", background)),
+            "toolbar": rgb(background),
+            "tab_text": rgb(foreground),
+            "tab_background_text": rgb(foreground),
+            "bookmark_text": rgb(foreground),
+            "toolbar_button_icon": rgb(foreground),
+            "omnibox_background": rgb(surface),
+            "omnibox_text": rgb(foreground),
+            "ntp_background": rgb(background),
+            "ntp_text": rgb(foreground),
+        }
+    },
+}
+browser_temp = browser_theme.with_name(".manifest.json.tmp")
+browser_temp.write_text(json.dumps(manifest, indent=2) + "\n")
+os.replace(browser_temp, browser_theme)
