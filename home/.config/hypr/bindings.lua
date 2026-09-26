@@ -32,6 +32,11 @@ hl.unbind("SUPER + CTRL + X")
 hl.unbind("SUPER + SHIFT + CTRL + A")
 hl.unbind("SUPER + SPACE")
 hl.unbind("SUPER + SHIFT + S")
+-- Closing the lid must not lock this unattended agent workstation. Keep the
+-- stock monitor reconciliation so clamshell/display state still follows the
+-- physical lid switch without making the graphical session inaccessible.
+hl.unbind("switch:on:Lid Switch")
+o.bind("switch:on:Lid Switch", nil, "omarchy-hyprland-monitor-clamshell", { locked = true })
 -- Keep every workspace on the standard tiled layout. The stock Super+L
 -- toggle can strand an existing workspace in scrolling mode even after it
 -- saves "dwindle" for the next session.
@@ -166,7 +171,7 @@ o.bind("ALT + SPACE", "File search", "omarchy-shell -q shell toggle io.github.co
 
 
 -- Ibara workstation panel. SUPER+I was free.
-o.bind("SUPER + I", "Ibara", "omarchy-shell -q shell toggle io.zet.ibara '{}'")
+o.bind("SUPER + I", "ibara", "omarchy-shell -q shell toggle io.zet.ibara '{}'")
 
 
 -- strata-installer: file-manager start

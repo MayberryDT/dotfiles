@@ -8,7 +8,7 @@
           "id": "omarchy.keyboard-layout"
         },
         {
-          "id": "omarchy.media"
+          "id": "omarchy.indicators"
         },
         {
           "defaultMode": "L",
@@ -26,9 +26,6 @@
         },
         {
           "id": "omarchy.system-update"
-        },
-        {
-          "id": "omarchy.indicators"
         }
       ],
       "left": [
@@ -43,11 +40,17 @@
         },
         {
           "id": "jankeesvw.workspace-name"
+        },
+        {
+          "id": "omarchy.media"
         }
       ],
       "right": [
         {
           "id": "omarchy.tray"
+        },
+        {
+          "id": "io.zet.ibara"
         },
         {
           "id": "omaplug"
@@ -66,16 +69,13 @@
           "alertAssignmentChanges": true,
           "alertHumanThreshold": 1,
           "alertsEnabled": true,
-          "appearance": "Rat Detective",
+          "appearance": "Omarchy",
           "desktopAudio": true,
           "fullscreen": true,
           "workspaceEnabled": true
         },
         {
           "id": "omarchy.agents"
-        },
-        {
-          "id": "io.zet.ibara"
         },
         {
           "id": "omarchy.network"
@@ -98,7 +98,8 @@
         {
           "id": "nixfred.pulse",
           "barSource": "ram",
-          "cpu.displayMode": 0
+          "cpu.displayMode": 0,
+          "ram.groupByApp": false
         },
         {
           "id": "tyler.notifications"
@@ -117,8 +118,8 @@
     "omarchy.notifications"
   ],
   "idle": {
-    "lock": 1950,
-    "screensaver": 1800
+    "lock": 2147483,
+    "screensaver": 2147483
   },
   "plugins": [
     {
