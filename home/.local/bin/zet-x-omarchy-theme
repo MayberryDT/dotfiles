@@ -156,15 +156,26 @@ for prop, groups in stock.items():
 
 # Semantic surfaces override the generic inline-color mappings above.
 css += """
-/* The post-detail page has a back/title header rather than a tablist.
-   Paint only its outer header surface, never all nested divs. */
-#react-root [data-testid="primaryColumn"] > div:first-child > div:first-child,
+/* X uses one sticky main-column header for posts, profiles, notifications,
+   Grok and the timeline. Its nested sheet can otherwise remain white. */
+#react-root [data-testid="primaryColumn"] .r-1h3ijdo,
+#react-root [data-testid="primaryColumn"] .r-1h3ijdo > div,
+#react-root [data-testid="primaryColumn"] .r-1h3ijdo > div > div,
+#react-root [data-testid="primaryColumn"] [style*="position: sticky"],
+#react-root [data-testid="primaryColumn"] [style*="position: sticky"] > div,
 #react-root [role="tablist"],
 #react-root [role="tablist"] :is(button, [role="button"]),
 #react-root :is(div, nav):has(> [role="tablist"]) > :not([role="tablist"]),
 #react-root :is(div, nav):has(> [role="tablist"]) > :not([role="tablist"]) :is(button, a, [role="button"]),
 #react-root [data-testid="primaryColumn"] :is(button, a, [role="button"]):is([aria-label="Add"], [aria-label="Add a column"], [aria-label="Add timeline"]) {
   background-color: var(--zet-x-bg) !important;
+}
+/* Remove stock white gradient layers from the same header surfaces. */
+#react-root [data-testid="primaryColumn"] .r-1h3ijdo,
+#react-root [data-testid="primaryColumn"] .r-1h3ijdo > div,
+#react-root [data-testid="primaryColumn"] .r-1h3ijdo > div > div,
+#react-root [data-testid="primaryColumn"] [style*="position: sticky"] {
+  background-image: none !important;
 }
 """
 
