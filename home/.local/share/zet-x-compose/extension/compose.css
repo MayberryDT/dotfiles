@@ -1,0 +1,50 @@
+/* Dedicated --app compose window: keep the dialog, drop the rest. */
+
+html,
+body {
+  overflow: hidden !important;
+  background: #000 !important;
+}
+
+header[role="banner"],
+[data-testid="sidebarColumn"],
+[data-testid="DMDrawer"],
+[data-testid="chat-drawer-root"],
+[data-testid="Sheet"] nav,
+div[data-testid="sidebarColumn"],
+[aria-label="Trending"] {
+  display: none !important;
+}
+
+/* Home timeline behind the modal */
+[data-testid="primaryColumn"] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Dimmer: don't paint a second overlay inside our already-small window */
+[data-testid="mask"] {
+  background: transparent !important;
+  backdrop-filter: none !important;
+}
+
+/* Make the compose dialog fill this window */
+div[role="dialog"],
+div[aria-modal="true"] {
+  visibility: visible !important;
+  pointer-events: auto !important;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  transform: none !important;
+}
+
+div[role="dialog"] *,
+div[aria-modal="true"] * {
+  visibility: visible !important;
+}

@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Zet X Compose",
+  "version": "1.2.0",
+  "description": "Omarchy colors for X, compose dialog chrome, and HDMI X PWA controls.",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://x.com/compose/*",
+        "https://twitter.com/compose/*"
+      ],
+      "css": ["compose.css"],
+      "js": ["compose.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
+      "js": ["theme.js", "pwa.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [{
+    "resources": ["palette.css"],
+    "matches": ["https://x.com/*", "https://twitter.com/*"]
+  }]
+}

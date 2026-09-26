@@ -64,4 +64,12 @@ cp -- "$source_home/.config/ghostty/config" "$dest/.config/ghostty/config"
 cp -- "$source_home/.config/kitty/kitty.conf" "$dest/.config/kitty/kitty.conf"
 cp -- "$source_home/.config/btop/btop.conf" "$dest/.config/btop/btop.conf"
 
+# X webapp Omarchy palette integration. The generated palette.css is runtime state.
+mkdir -p "$dest/.local/bin" "$dest/.local/share/zet-x-compose/extension"
+cp -- "$source_home/.local/bin/zet-x-omarchy-theme" "$dest/.local/bin/zet-x-omarchy-theme"
+for file in manifest.json theme.js compose.css compose.js pwa.js; do
+  cp -- "$source_home/.local/share/zet-x-compose/extension/$file" \
+    "$dest/.local/share/zet-x-compose/extension/$file"
+done
+
 "$repo_root/scripts/check-public"
