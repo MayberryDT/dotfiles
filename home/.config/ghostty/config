@@ -2,7 +2,7 @@
 config-file = ?"~/.local/state/omarchy/current/theme/ghostty.conf"
 
 # Font
-font-family = "Liberation Mono"
+font-family = "JetBrainsMono Nerd Font"
 font-style = Regular
 font-size = 9
 
@@ -34,8 +34,10 @@ keybind = super+control+shift+alt+arrow_up=resize_split:up,100
 keybind = super+control+shift+alt+arrow_left=resize_split:left,100
 keybind = super+control+shift+alt+arrow_right=resize_split:right,100
 
-# Slowdown mouse scrolling
-mouse-scroll-multiplier = 0.95
+# Notched wheel: lines per click. A bare number also overrides the
+# precision (trackpad / high-res) multiplier, so keep those split.
+# Ghostty's discrete default is 3; 12 is much faster.
+mouse-scroll-multiplier = precision:1,discrete:12
 
 # Fix general slowness on hyprland (https://github.com/ghostty-org/ghostty/discussions/3224)
 async-backend = epoll

@@ -82,3 +82,6 @@ hl.on("monitor.added", function(mon)
   end
 end)
 hl.on("config.reloaded", pin_all_hdmi_status)
+
+-- Ibara operator console floats; other Quickshell windows keep their own rules.
+o.window({ class = "^org.quickshell$", title = "^ibara · console$" }, { float = true, center = true })

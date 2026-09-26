@@ -26,6 +26,9 @@
         },
         {
           "id": "omarchy.system-update"
+        },
+        {
+          "id": "omarchy.media"
         }
       ],
       "left": [
@@ -42,7 +45,7 @@
           "id": "jankeesvw.workspace-name"
         },
         {
-          "id": "omarchy.media"
+          "id": "gladimdim.ai-limits"
         }
       ],
       "right": [
@@ -107,7 +110,7 @@
       ]
     },
     "position": "top",
-    "transparent": true
+    "transparent": false
   },
   "cloneSourceRestores": [
     "tyler.menu",

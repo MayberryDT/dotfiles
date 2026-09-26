@@ -1,0 +1,29 @@
+#!/bin/sh
+# First-party Helm theme-set.d drop-in (Omarchy Quattro hook contract).
+# Official omarchy-theme-set at 9c5482c58dbe4974de337450754885083c91eada
+# stages atomically, writes theme.name, then:
+#   omarchy-hook theme-set "$name"
+# Drop-ins receive the snake-cased theme name in $1.
+# Forward only that name to the daemon. Never source or execute a file
+# from a theme repository. Never apply a theme.
+set -eu
+
+name="${1-}"
+case "$name" in
+  "" | .* | */* | *\\* | *..*)
+    echo "helm-theme-sync: refuse invalid theme name" >&2
+    exit 1
+    ;;
+esac
+
+# Data-only forward of $1. Tests set HELM_THEME_SYNC_FORWARD; otherwise write
+# the name into the daemon runtime inbox. Do not pass extra arguments.
+forward="${HELM_THEME_SYNC_FORWARD-}"
+if [ -n "$forward" ]; then
+  printf '%s\n' "$name" > "$forward"
+  exit 0
+fi
+
+runtime="${XDG_RUNTIME_DIR:-/tmp}/helm-daemon"
+mkdir -p "$runtime"
+printf '%s\n' "$name" > "$runtime/theme-set.name"
