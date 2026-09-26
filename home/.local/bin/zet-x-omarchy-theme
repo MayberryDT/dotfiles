@@ -28,6 +28,7 @@ foreground = color("foreground", "#171717" if light else "#F7F9F9")
 muted = color("dark_foreground", foreground)
 accent = color("accent", foreground)
 link = color("blue", accent)
+like = color("red", accent)
 border = color("muted", hover)
 selection = color("selection_background", hover)
 selection_text = color("selection_foreground", foreground)
@@ -49,6 +50,7 @@ css = f"""/* Generated from the active Omarchy theme. */
   --zet-x-muted: {muted};
   --zet-x-accent: {accent};
   --zet-x-link: {link};
+  --zet-x-like: {like};
   --zet-x-accent-fg: {readable_on(accent)};
   --zet-x-border: {border};
 }}
@@ -73,6 +75,14 @@ html, body, #react-root {{
 }}
 #react-root :is(a[href*="/hashtag/"], a[href^="https://t.co/"],
 [data-testid="icon-verified"]) {{ color: var(--zet-x-link) !important; }}
+#react-root [data-testid="unlike"],
+#react-root [data-testid="unlike"] :is(div, span, svg),
+#react-root [data-testid="like"]:hover,
+#react-root [data-testid="like"]:hover :is(div, span, svg),
+#react-root .r-2ettn2 {{ color: var(--zet-x-like) !important; }}
+#react-root :is([data-testid="like"], [data-testid="unlike"]):hover {{
+  background-color: color-mix(in srgb, var(--zet-x-like) 10%, transparent) !important;
+}}
 /* Atomic classes also cover already-open pages until the new script loads. */
 #react-root .r-14lw9ot, #react-root .r-kemksi,
 #react-root .r-5zmot {{ background-color: var(--zet-x-bg) !important; }}
@@ -90,6 +100,7 @@ stock = {
         "accent": ["rgb(29, 155, 240)", "rgb(29, 161, 242)", "rgb(0, 153, 255)"],
     },
     "color": {
+        "like": ["rgb(249, 24, 128)", "rgb(224, 36, 94)"],
         "fg": ["rgb(15, 20, 25)", "rgb(231, 233, 234)", "rgb(217, 217, 217)"],
         "muted": ["rgb(83, 100, 113)", "rgb(113, 118, 123)", "rgb(139, 152, 165)"],
         "link": ["rgb(29, 155, 240)", "rgb(29, 161, 242)", "rgb(0, 153, 255)"],

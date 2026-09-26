@@ -22,7 +22,8 @@
     const alpha = match[4] === undefined ? 1 : Number(match[4]);
     if (!alpha) return null;
     let token;
-    if (blue.has(rgb)) token = property === "background-color" ? "accent" : "link";
+    if (rgb === "249,24,128" || rgb === "224,36,94") token = "like";
+    else if (blue.has(rgb)) token = property === "background-color" ? "accent" : "link";
     else if (property === "background-color") token = backgrounds.get(rgb);
     else if (property === "color") token = text.get(rgb);
     else if (property.startsWith("border-") && borders.has(rgb)) token = "border";
