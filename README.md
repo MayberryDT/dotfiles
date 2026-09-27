@@ -20,6 +20,10 @@ After restoring the X integration, run `~/.local/bin/zet-x-omarchy-theme`
 once to generate its current palette and browser-theme manifest. These generated
 files are runtime state and are not published here.
 
+The Voxtype keybindings use `~/.local/bin/voxtype-backup` to save local FLAC
+audio during dictation. The helper is included; recordings under
+`~/.local/share/voxtype/recordings/` are private runtime data and are excluded.
+
 ## Layout
 
 Files under `home/` mirror paths relative to `$HOME`. Review every file before

@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Save each dictation independently of Voxtype's transcription and history.
+set -euo pipefail
+umask 077
+
+recordings="$HOME/.local/share/voxtype/recordings"
+runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+unit=voxtype-backup.service
+mkdir -p -m 700 "$recordings"
+chmod 700 "$recordings"
+exec 9>"$runtime/voxtype-backup.lock"
+flock -x 9
+
+alert() {
+  logger -t voxtype-backup -- "$1"
+  notify-send -u critical 'Dictation backup' "$1" 2>/dev/null || true
+}
+
+recording() {
+  systemctl --user is-active --quiet "$unit"
+}
+
+stop_audio() {
+  if recording; then
+    systemctl --user stop "$unit" || true
+  fi
+  systemctl --user reset-failed "$unit" 2>/dev/null || true
+}
+
+start() {
+  if recording; then
+    return 0
+  fi
+  find "$recordings" -maxdepth 1 -type f -name '*.flac' -mtime +29 -delete
+  systemctl --user reset-failed "$unit" 2>/dev/null || true
+  local file="$recordings/$(date +%Y-%m-%d_%H-%M-%S-%N).flac"
+  if ! systemd-run --user --quiet --unit=voxtype-backup \
+      --property=Type=exec --property=KillSignal=SIGINT \
+      --property=UMask=0077 \
+      --property=RuntimeMaxSec=1860 -- \
+      ffmpeg -nostdin -hide_banner -loglevel error -f pulse -i default \
+      -ac 1 -ar 16000 -c:a flac -compression_level 0 -flush_packets 1 \
+      "$file"; then
+    alert 'Audio backup could not start; dictation was not started.'
+    return 1
+  fi
+  local attempt
+  for attempt in {1..25}; do
+    if [[ -s "$file" ]] && recording; then
+      if voxtype record start; then
+        return 0
+      fi
+      break
+    fi
+    recording || break
+    sleep 0.1
+  done
+  stop_audio
+  alert 'Audio backup did not begin recording; dictation was not started.'
+  return 1
+}
+
+case "${1:-}" in
+  start) start ;;
+  stop)
+    voxtype record stop || true
+    stop_audio
+    ;;
+  toggle)
+    if recording || [[ "$(voxtype status --format json 2>/dev/null | jq -r '.alt // empty' 2>/dev/null)" == recording ]]; then
+      voxtype record stop || true
+      stop_audio
+    else
+      start
+    fi
+    ;;
+  cancel)
+    voxtype record cancel || true
+    stop_audio
+    ;;
+  last)
+    find "$recordings" -maxdepth 1 -type f -name '*.flac' -printf '%f\n' | sort | tail -1 | sed "s|^|$recordings/|"
+    ;;
+  *)
+    echo 'usage: voxtype-backup start|stop|toggle|cancel|last' >&2
+    exit 2
+    ;;
+esac

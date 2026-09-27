@@ -69,6 +69,7 @@ cp -- "$source_home/.config/brave-origin-flags.conf" "$dest/.config/brave-origin
 # manifest are runtime state derived from the active theme.
 mkdir -p "$dest/.local/bin" "$dest/.local/share/zet-x-compose/extension"
 cp -- "$source_home/.local/bin/zet-x-omarchy-theme" "$dest/.local/bin/zet-x-omarchy-theme"
+cp -- "$source_home/.local/bin/voxtype-backup" "$dest/.local/bin/voxtype-backup"
 for file in manifest.json theme.js compose.css compose.js pwa.js; do
   cp -- "$source_home/.local/share/zet-x-compose/extension/$file" \
     "$dest/.local/share/zet-x-compose/extension/$file"

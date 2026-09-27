@@ -117,7 +117,11 @@ hl.on("input.keyboard.key", function(keycode, _, state)
   end
 end)
 
-o.bind("CTRL + SPACE", "Toggle dictation", "voxtype record toggle")
+-- Start the independent audio backup before Voxtype on either recording key.
+hl.unbind("F9")
+o.bind("F9", "Start dictation (push-to-talk)", "/home/tyler/.local/bin/voxtype-backup start")
+o.bind("F9", "Stop dictation (push-to-talk)", "/home/tyler/.local/bin/voxtype-backup stop", { release = true })
+o.bind("CTRL + SPACE", "Toggle dictation", "/home/tyler/.local/bin/voxtype-backup toggle")
 o.bind("INSERT", "Reinsert last dictation", "/home/tyler/.local/bin/voxtype-history paste-last")
 o.bind("SUPER + SHIFT + V", "Paste last dictation", "/home/tyler/.local/bin/voxtype-history paste-last")
 o.bind("SUPER + ALT + V", "Dictation history", "/home/tyler/.local/bin/voxtype-history pick")
