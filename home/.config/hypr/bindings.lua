@@ -50,12 +50,13 @@ o.bind("SUPER + SHIFT + S", "Snipping tool", "omarchy-capture-screenshot region"
 -- Restore stock Omarchy menu on Super+Space. Super-tap does not open the menu.
 o.bind("SUPER + SPACE", "Omarchy menu", "omarchy-menu toggle")
 
--- Workspace switcher HUD stays up while Ctrl+Alt or Super+Tab is held, then
--- hides on release. XKB: Super 133/134, Ctrl 37/105, Alt 64/108, Tab 23.
+-- Workspace switcher HUD stays up while Ctrl+Alt is held, or once Tab/Left/Right
+-- is pressed with Super held, then hides on release.
+-- XKB: Super 133/134, Ctrl 37/105, Alt 64/108, Tab 23, Left 113, Right 114.
 local super_keys = { [133] = true, [134] = true }
 local ctrl_keys = { [37] = true, [105] = true }
 local alt_keys = { [64] = true, [108] = true }
-local tab_key = 23
+local super_switcher_keys = { [23] = true, [113] = true, [114] = true }
 local super_down = {}
 local ctrl_down = {}
 local alt_down = {}
@@ -110,7 +111,7 @@ hl.on("input.keyboard.key", function(keycode, _, state)
       end
     end
   elseif pressed and next(super_down) ~= nil then
-    if keycode == tab_key and not super_switcher_held then
+    if super_switcher_keys[keycode] and not super_switcher_held then
       super_switcher_held = true
       workspace_switcher_hold()
     end
@@ -143,7 +144,7 @@ o.bind("SUPER + ALT + M", "Omamin: restore last minimized", "omarchy-shell -q om
 -- following when Shift is held. The helper also plays a subtle direction cue.
 -- Preserve Omarchy's occupied-workspace cycle on Super+Tab while adding the
 -- same sound. Shift moves the focused window to the next occupied workspace
--- and follows it, analogous to Ctrl+Alt+Shift+Arrow's move-and-follow flow.
+-- and follows it, analogous to Super+Shift+Arrow's move-and-follow flow.
 hl.unbind("SUPER + TAB")
 hl.unbind("SUPER + SHIFT + TAB")
 o.bind("SUPER + TAB", "Next occupied workspace", "/home/tyler/.local/bin/zet-workspace-flow cycle")
@@ -157,10 +158,16 @@ for workspace = 1, 10 do
   hl.unbind("SUPER + " .. key)
   o.bind("CTRL + ALT + " .. key, "Switch to workspace " .. workspace, hl.dsp.focus({ workspace = tostring(workspace) }))
 end
-o.bind("CTRL + ALT + LEFT", "Previous workspace", "/home/tyler/.local/bin/zet-workspace-flow left")
-o.bind("CTRL + ALT + RIGHT", "Next workspace", "/home/tyler/.local/bin/zet-workspace-flow right")
-o.bind("CTRL + ALT + SHIFT + LEFT", "Move window to previous workspace", "/home/tyler/.local/bin/zet-workspace-flow left move")
-o.bind("CTRL + ALT + SHIFT + RIGHT", "Move window to next workspace", "/home/tyler/.local/bin/zet-workspace-flow right move")
+-- Super+Left/Right replace stock focus left/right; Super+Shift+Left/Right
+-- replace stock swap left/right. Super+Up/Down keep stock focus.
+hl.unbind("SUPER + LEFT")
+hl.unbind("SUPER + RIGHT")
+hl.unbind("SUPER + SHIFT + LEFT")
+hl.unbind("SUPER + SHIFT + RIGHT")
+o.bind("SUPER + LEFT", "Previous workspace", "/home/tyler/.local/bin/zet-workspace-flow left")
+o.bind("SUPER + RIGHT", "Next workspace", "/home/tyler/.local/bin/zet-workspace-flow right")
+o.bind("SUPER + SHIFT + LEFT", "Move window to previous workspace", "/home/tyler/.local/bin/zet-workspace-flow left move")
+o.bind("SUPER + SHIFT + RIGHT", "Move window to next workspace", "/home/tyler/.local/bin/zet-workspace-flow right move")
 
 -- Note: SUPER+CTRL+O was previously bound to Toggle menu. Replaced with the
 -- bar to-do list. Super+Space opens the Omarchy menu.
