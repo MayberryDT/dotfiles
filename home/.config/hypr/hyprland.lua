@@ -37,8 +37,8 @@ require("default.hypr.toggles")
 -- Hyprland keybind dispatchers see the variable (hyprctl setenv does not).
 hl.env("OMARCHY_SCREENSHOT_DIR", os.getenv("HOME") .. "/Pictures/Screenshots")
 
--- YouTube recordings are prepared automatically after capture stops.
-hl.env("OMARCHY_SCREENRECORD_DIR", os.getenv("HOME") .. "/YouTube/inbox")
+-- Screen recordings land in ~/Videos.
+hl.env("OMARCHY_SCREENRECORD_DIR", os.getenv("HOME") .. "/Videos")
 
 -- Keep VA-API video decode on the Intel iGPU that drives this display.
 --
