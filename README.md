@@ -11,14 +11,11 @@ backups, media, credentials, and third-party plugin source are excluded.
 - Omarchy shell layout and extension settings
 - Custom hooks and the small `tyler.*` shell plugins
 - Alacritty, Foot, Ghostty, Kitty, and btop configuration
-- Brave Origin flags and X webapp palette integration
+- Brave Origin flags
 
 The shell layout references separately installed community plugins. The active
 theme is recorded in `omarchy/current-theme.txt`; install themes and plugins
 through Omarchy before applying the corresponding settings.
-After restoring the X integration, run `~/.local/bin/zet-x-omarchy-theme`
-once to generate its current palette and browser-theme manifest. These generated
-files are runtime state and are not published here.
 
 The Voxtype keybindings use `~/.local/bin/voxtype-backup` to save local FLAC
 audio during dictation. The helper is included; recordings under
