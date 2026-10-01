@@ -29,5 +29,7 @@
   // "about": {"icon":"","label":"About","action":"omarchy-launch-or-focus-tui \"zsh -c 'fastfetch; read -k 1'\""},
   "style.lockscreen": {"icon":"󰌾","label":"Lock Screen","aliases":["lockscreen","lock-screen"],"description":"Preview and choose a lock screen design","action":"omarchy-shell lock explore"},
   "smoke-break": {"icon":"󰎆","label":"Smoke Break","aliases":["smoke-break","smokebreak"],"description":"Play Smoke Break on repeat in CLI Amp","action":"omarchy-launch-or-focus-tui --app-id=org.omarchy.cliamp.smoke-break \"cliamp --auto-play --repeat one --playlist 'Smoke Break'\""},
-  "silver-bullets": {"icon":"󰎆","label":"Silver Bullets","aliases":["silver-bullets","silverbullets","phonk"],"description":"Play Silver Bullets on repeat in CLI Amp","action":"omarchy-launch-or-focus-tui --app-id=org.omarchy.cliamp.silver-bullets \"cliamp --auto-play --repeat one --playlist 'Silver Bullets'\""}
+  "silver-bullets": {"icon":"󰎆","label":"Silver Bullets","aliases":["silver-bullets","silverbullets","phonk"],"description":"Play Silver Bullets on repeat in CLI Amp","action":"omarchy-launch-or-focus-tui --app-id=org.omarchy.cliamp.silver-bullets \"cliamp --auto-play --repeat one --playlist 'Silver Bullets'\""},
+  // Fifth Screenrecord option: record only the webcam + microphone, no screen.
+  "trigger.capture.screenrecord.webcam-only": {"icon":"󰖠","label":"Webcam only (with microphone)","when":"omarchy-hw-webcam","action":"$HOME/.local/bin/webcam-recording"}
 }
