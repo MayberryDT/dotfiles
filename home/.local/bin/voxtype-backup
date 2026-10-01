@@ -27,15 +27,40 @@ stop_audio() {
   systemctl --user reset-failed "$unit" 2>/dev/null || true
 }
 
+voxtype_recording() {
+  [[ "$(voxtype status --format json 2>/dev/null | jq -r '.alt // empty' 2>/dev/null)" == recording ]]
+}
+
+prune() {
+  find "$recordings" -maxdepth 1 -type f -name '*.flac' -mtime +29 -delete
+}
+
+# Dictation starts as soon as the recorder process exists. The audio device takes
+# ~130 ms to deliver data, so a detached watchdog confirms the file grows and alerts
+# if this take has no backup. It closes the lock fd so stop/cancel never wait on it.
+watch_backup() {
+  local file=$1
+  (
+    exec 9>&-
+    for _ in {1..150}; do
+      [[ -s "$file" ]] && exit 0
+      sleep 0.01
+    done
+    if voxtype_recording; then
+      alert 'Audio backup did not start; this take has no saved copy.'
+    fi
+  ) </dev/null >/dev/null 2>&1 &
+}
+
 start() {
   if recording; then
     return 0
   fi
-  find "$recordings" -maxdepth 1 -type f -name '*.flac' -mtime +29 -delete
   systemctl --user reset-failed "$unit" 2>/dev/null || true
   local file="$recordings/$(date +%Y-%m-%d_%H-%M-%S-%N).flac"
   if ! systemd-run --user --quiet --unit=voxtype-backup \
       --property=Type=exec --property=KillSignal=SIGINT \
+      --property=SuccessExitStatus=255 \
       --property=UMask=0077 \
       --property=RuntimeMaxSec=1860 -- \
       ffmpeg -nostdin -hide_banner -loglevel error -f pulse -i default \
@@ -44,20 +69,21 @@ start() {
     alert 'Audio backup could not start; dictation was not started.'
     return 1
   fi
-  local attempt
-  for attempt in {1..25}; do
-    if [[ -s "$file" ]] && recording; then
-      if voxtype record start; then
-        return 0
-      fi
-      break
-    fi
-    recording || break
-    sleep 0.1
-  done
-  stop_audio
-  alert 'Audio backup did not begin recording; dictation was not started.'
-  return 1
+  if ! voxtype record start; then
+    stop_audio
+    alert 'Voxtype did not start recording.'
+    return 1
+  fi
+  watch_backup "$file"
+}
+
+# A cancelled take keeps its audio but is renamed so recovery does not offer it.
+mark_cancelled() {
+  local newest
+  newest=$(find "$recordings" -maxdepth 1 -type f -name '*.flac' ! -name '*.cancelled.flac' -printf '%f\n' | sort | tail -1)
+  if [[ -n "$newest" ]]; then
+    mv -- "$recordings/$newest" "$recordings/${newest%.flac}.cancelled.flac"
+  fi
 }
 
 case "${1:-}" in
@@ -65,18 +91,25 @@ case "${1:-}" in
   stop)
     voxtype record stop || true
     stop_audio
+    prune
     ;;
   toggle)
-    if recording || [[ "$(voxtype status --format json 2>/dev/null | jq -r '.alt // empty' 2>/dev/null)" == recording ]]; then
+    if recording || voxtype_recording; then
       voxtype record stop || true
       stop_audio
+      prune
     else
       start
     fi
     ;;
   cancel)
     voxtype record cancel || true
-    stop_audio
+    if recording; then
+      stop_audio
+      mark_cancelled
+    else
+      stop_audio
+    fi
     ;;
   last)
     find "$recordings" -maxdepth 1 -type f -name '*.flac' -printf '%f\n' | sort | tail -1 | sed "s|^|$recordings/|"

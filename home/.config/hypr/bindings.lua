@@ -126,6 +126,7 @@ o.bind("CTRL + SPACE", "Toggle dictation", "/home/tyler/.local/bin/voxtype-backu
 o.bind("INSERT", "Reinsert last dictation", "/home/tyler/.local/bin/voxtype-history paste-last")
 o.bind("SUPER + SHIFT + V", "Paste last dictation", "/home/tyler/.local/bin/voxtype-history paste-last")
 o.bind("SUPER + ALT + V", "Dictation history", "/home/tyler/.local/bin/voxtype-history pick")
+o.bind("SUPER + ALT + R", "Transcribe failed dictation again", "/home/tyler/.local/bin/voxtype-history recover")
 o.bind("SUPER + SHIFT + CTRL + A", "Zet", "/home/tyler/.local/bin/hermes-desktop-launch")
 
 -- Leave Shift+Tab available to applications.
