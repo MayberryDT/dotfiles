@@ -12,10 +12,17 @@ backups, media, credentials, and third-party plugin source are excluded.
 - Custom hooks and the small `tyler.*` shell plugins
 - Alacritty, Foot, Ghostty, Kitty, and btop configuration
 - Brave Origin flags
+- Violet Current theme palette
 
 The shell layout references separately installed community plugins. The active
 theme is recorded in `omarchy/current-theme.txt`; install themes and plugins
 through Omarchy before applying the corresponding settings.
+
+Violet Current's palette is included at
+`home/.config/omarchy/themes/violet-current/colors.toml`. Its wallpaper artwork
+is maintained separately and excluded from this configuration mirror, along
+with screenshots and personal portrait assets. Add your preferred backgrounds
+to `~/.config/omarchy/themes/violet-current/backgrounds/` before selecting it.
 
 The Voxtype keybindings use `~/.local/bin/voxtype-backup` to save local FLAC
 audio during dictation. The helper is included; recordings under
