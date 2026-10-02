@@ -180,7 +180,8 @@ end
 -- Super+Left/Right step to the adjacent numbered workspace (1-10; from HDMI
 -- they return to the laptop). Super+Shift+Left/Right take the focused window
 -- along. Super+Up/Down take over the stock window focus that Super+Left/Right
--- had. Super+Shift+Up/Down stay stock window swaps.
+-- had. Super+Shift+Up/Down take over the stock left/right window swaps:
+-- Up swaps right, Down swaps left.
 -- Directional focus and swaps stop at the edge of the monitor instead of
 -- reaching across: HDMI-A-1 sits left of the laptop, so a swap at the left
 -- edge pulled the X window onto the laptop and pushed a laptop window onto
@@ -192,12 +193,16 @@ hl.unbind("SUPER + SHIFT + LEFT")
 hl.unbind("SUPER + SHIFT + RIGHT")
 hl.unbind("SUPER + UP")
 hl.unbind("SUPER + DOWN")
+hl.unbind("SUPER + SHIFT + UP")
+hl.unbind("SUPER + SHIFT + DOWN")
 o.bind("SUPER + LEFT", "Previous workspace", "/home/tyler/.local/bin/zet-workspace-flow left")
 o.bind("SUPER + RIGHT", "Next workspace", "/home/tyler/.local/bin/zet-workspace-flow right")
 o.bind("SUPER + SHIFT + LEFT", "Move window to previous workspace", "/home/tyler/.local/bin/zet-workspace-flow left move")
 o.bind("SUPER + SHIFT + RIGHT", "Move window to next workspace", "/home/tyler/.local/bin/zet-workspace-flow right move")
 o.bind("SUPER + UP", "Focus on left window", hl.dsp.focus({ direction = "l" }))
 o.bind("SUPER + DOWN", "Focus on right window", hl.dsp.focus({ direction = "r" }))
+o.bind("SUPER + SHIFT + UP", "Swap window to the right", hl.dsp.window.swap({ direction = "r" }))
+o.bind("SUPER + SHIFT + DOWN", "Swap window to the left", hl.dsp.window.swap({ direction = "l" }))
 
 -- Only Super+Alt+X changes what HDMI-A-1 shows. Super+scroll steps through
 -- the occupied numbered workspaces on the laptop and stops at the first and
