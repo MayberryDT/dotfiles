@@ -24,3 +24,29 @@ for workspace = 1, 10 do
     layout = "dwindle",
   })
 end
+
+-- What HDMI-A-1 shows changes only through zet-hdmi-view (Super+Alt+X), which
+-- calls zet_hdmi_set_view() before it switches. Anything else that lands
+-- another workspace on HDMI is put back to the chosen view at once.
+local hdmi_views = { hdmi = true, ["hdmi-x"] = true, ["hdmi-open"] = true }
+local hdmi_view = nil
+
+-- On a config reload, keep whatever view HDMI already shows.
+do
+  local ok, monitor = pcall(hl.get_monitor, "HDMI-A-1")
+  local active = ok and monitor and monitor.active_workspace
+  if active and hdmi_views[active.name] then hdmi_view = active.name end
+end
+
+function zet_hdmi_set_view(name)
+  if hdmi_views[name] then hdmi_view = name end
+end
+
+hl.on("workspace.active", function(workspace)
+  local monitor = workspace and workspace.monitor
+  if not monitor or monitor.name ~= "HDMI-A-1" or workspace.special then return end
+  if hdmi_view == nil then hdmi_view = hdmi_views[workspace.name] and workspace.name or "hdmi" end
+  if workspace.name ~= hdmi_view then
+    hl.dispatch(hl.dsp.focus({ workspace = "name:" .. hdmi_view }))
+  end
+end)
