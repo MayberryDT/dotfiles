@@ -55,18 +55,17 @@ o.bind("SUPER + SPACE", "Omarchy menu", "omarchy-menu toggle")
 -- flash it, and Super+Left/Right/Tab show it at once. Letting go of Super
 -- hides it. Any other key pressed with Super is a shortcut and takes it down;
 -- moving the pointer before the pause ends (Super+drag) keeps it away.
--- Super+Up/Down and Super+Shift+Left/Right (window focus and swaps) leave an
--- open HUD up but stop a pending one from appearing.
--- XKB: Super 133/134, Shift 50/62, Tab 23, Left 113, Right 114, Up 111, Down 116.
+-- Super+Up/Down (window focus) leave an open HUD up but stop a pending one
+-- from appearing. Super+Shift+Left/Right move the window with the workspace
+-- change, so they show the HUD the same way as Super+Left/Right.
+-- XKB: Super 133/134, Tab 23, Left 113, Right 114, Up 111, Down 116.
 local SWITCHER_DELAY_MS = 250
 local POINTER_SLOP = 4
 local super_keys = { [133] = true, [134] = true }
-local shift_keys = { [50] = true, [62] = true }
 local arrow_keys = { [113] = true, [114] = true }
 local tab_key = 23
 local window_keys = { [111] = true, [116] = true }
 local super_down = {}
-local shift_down = {}
 local switcher_generation = 0
 local switcher_shown = false
 local super_press_cursor = nil
@@ -105,10 +104,6 @@ local function switcher_hide()
 end
 
 local function switcher_key(keycode, state)
-  if shift_keys[keycode] then
-    shift_down[keycode] = (state ~= 0) or nil
-    return
-  end
   if super_keys[keycode] then
     if state == 1 then
       local first = next(super_down) == nil
@@ -130,10 +125,9 @@ local function switcher_key(keycode, state)
       end
     end
   elseif state == 1 and next(super_down) ~= nil then
-    local shifted = next(shift_down) ~= nil
-    if keycode == tab_key or (arrow_keys[keycode] and not shifted) then
+    if keycode == tab_key or arrow_keys[keycode] then
       switcher_show()
-    elseif window_keys[keycode] or arrow_keys[keycode] then
+    elseif window_keys[keycode] then
       switcher_generation = switcher_generation + 1
     else
       switcher_hide()
@@ -184,8 +178,9 @@ for workspace = 1, 10 do
   o.bind("CTRL + ALT + " .. key, "Switch to workspace " .. workspace, hl.dsp.focus({ workspace = tostring(workspace) }))
 end
 -- Super+Left/Right step to the adjacent numbered workspace (1-10; from HDMI
--- they return to the laptop). Super+Up/Down take over the stock window focus
--- that Super+Left/Right had. Super+Shift+Left/Right stay stock window swaps.
+-- they return to the laptop). Super+Shift+Left/Right take the focused window
+-- along. Super+Up/Down take over the stock window focus that Super+Left/Right
+-- had. Super+Shift+Up/Down stay stock window swaps.
 -- Directional focus and swaps stop at the edge of the monitor instead of
 -- reaching across: HDMI-A-1 sits left of the laptop, so a swap at the left
 -- edge pulled the X window onto the laptop and pushed a laptop window onto
@@ -193,10 +188,14 @@ end
 hl.config({ binds = { window_direction_monitor_fallback = false } })
 hl.unbind("SUPER + LEFT")
 hl.unbind("SUPER + RIGHT")
+hl.unbind("SUPER + SHIFT + LEFT")
+hl.unbind("SUPER + SHIFT + RIGHT")
 hl.unbind("SUPER + UP")
 hl.unbind("SUPER + DOWN")
 o.bind("SUPER + LEFT", "Previous workspace", "/home/tyler/.local/bin/zet-workspace-flow left")
 o.bind("SUPER + RIGHT", "Next workspace", "/home/tyler/.local/bin/zet-workspace-flow right")
+o.bind("SUPER + SHIFT + LEFT", "Move window to previous workspace", "/home/tyler/.local/bin/zet-workspace-flow left move")
+o.bind("SUPER + SHIFT + RIGHT", "Move window to next workspace", "/home/tyler/.local/bin/zet-workspace-flow right move")
 o.bind("SUPER + UP", "Focus on left window", hl.dsp.focus({ direction = "l" }))
 o.bind("SUPER + DOWN", "Focus on right window", hl.dsp.focus({ direction = "r" }))
 
