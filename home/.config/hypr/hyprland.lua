@@ -58,3 +58,6 @@ hl.env("LIBVA_DRIVER_NAME", "iHD")
 -- Tile DaVinci Resolve under the Omarchy bar instead of true-fullscreening
 -- over it. See hypr/davinci-resolve.lua.
 require("hypr.davinci-resolve")
+
+-- Omaroll: opaque window, floating centred viewer. See hypr/omaroll.lua.
+require("hypr.omaroll")
