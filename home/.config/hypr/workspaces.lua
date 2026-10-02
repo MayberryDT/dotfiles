@@ -47,6 +47,14 @@ hl.on("workspace.active", function(workspace)
   if not monitor or monitor.name ~= "HDMI-A-1" or workspace.special then return end
   if hdmi_view == nil then hdmi_view = hdmi_views[workspace.name] and workspace.name or "hdmi" end
   if workspace.name ~= hdmi_view then
-    hl.dispatch(hl.dsp.focus({ workspace = "name:" .. hdmi_view }))
+    -- Put it back once the dispatch that moved it has finished: a revert
+    -- dispatched from inside that dispatch was overwritten by it.
+    hl.timer(function()
+      local ok, hdmi = pcall(hl.get_monitor, "HDMI-A-1")
+      local active = ok and hdmi and hdmi.active_workspace
+      if active and active.name ~= hdmi_view then
+        hl.dispatch(hl.dsp.focus({ workspace = "name:" .. hdmi_view }))
+      end
+    end, { timeout = 1, type = "oneshot" })
   end
 end)

@@ -200,20 +200,34 @@ o.bind("SUPER + RIGHT", "Next workspace", "/home/tyler/.local/bin/zet-workspace-
 o.bind("SUPER + UP", "Focus on left window", hl.dsp.focus({ direction = "l" }))
 o.bind("SUPER + DOWN", "Focus on right window", hl.dsp.focus({ direction = "r" }))
 
--- Only Super+Alt+X changes what HDMI-A-1 shows. Super+scroll steps the
--- laptop's workspaces and does nothing over HDMI (stock would step it through
--- hdmi -> hdmi-x -> hdmi-open). Super+Shift+Alt+Arrow moved a workspace onto or
--- off that monitor, so it stays unbound. hypr/workspaces.lua and
+-- Only Super+Alt+X changes what HDMI-A-1 shows. Super+scroll steps through
+-- the occupied numbered workspaces on the laptop and stops at the first and
+-- last; over HDMI it does nothing. Hyprland's e+1/e-1 ran past the last laptop
+-- workspace onto HDMI's named views. Super+Shift+Alt+Arrow moved a workspace
+-- onto or off that monitor, so it stays unbound. hypr/workspaces.lua and
 -- hypr/windows.lua catch any other path.
-function zet_super_scroll(step)
+function zet_super_scroll(direction)
   local monitor = hl.get_monitor_at_cursor()
-  if monitor ~= nil and monitor.name == "HDMI-A-1" then return end
-  hl.dispatch(hl.dsp.focus({ workspace = step }))
+  if monitor == nil or monitor.name == "HDMI-A-1" then return end
+  local active = monitor.active_workspace
+  local current = active and active.id or 0
+  if current < 1 or current > 10 then return end
+  local target = nil
+  for _, workspace in ipairs(hl.get_workspaces()) do
+    local id = workspace.id
+    if id >= 1 and id <= 10 and workspace.windows > 0 then
+      if direction > 0 and id > current and (target == nil or id < target) then target = id end
+      if direction < 0 and id < current and (target == nil or id > target) then target = id end
+    end
+  end
+  if target ~= nil then
+    hl.dispatch(hl.dsp.focus({ workspace = tostring(target) }))
+  end
 end
 hl.unbind("SUPER + mouse_down")
 hl.unbind("SUPER + mouse_up")
-o.bind("SUPER + mouse_down", "Scroll active workspace forward", function() zet_super_scroll("e+1") end)
-o.bind("SUPER + mouse_up", "Scroll active workspace backward", function() zet_super_scroll("e-1") end)
+o.bind("SUPER + mouse_down", "Scroll active workspace forward", function() zet_super_scroll(1) end)
+o.bind("SUPER + mouse_up", "Scroll active workspace backward", function() zet_super_scroll(-1) end)
 for _, direction in ipairs({ "LEFT", "RIGHT", "UP", "DOWN" }) do
   hl.unbind("SUPER + SHIFT + ALT + " .. direction)
 end
