@@ -50,71 +50,99 @@ o.bind("SUPER + SHIFT + S", "Snipping tool", "omarchy-capture-screenshot region"
 -- Restore stock Omarchy menu on Super+Space. Super-tap does not open the menu.
 o.bind("SUPER + SPACE", "Omarchy menu", "omarchy-menu toggle")
 
--- Workspace switcher HUD stays up while Ctrl+Alt or Super+Tab is held, then
--- hides on release. XKB: Super 133/134, Ctrl 37/105, Alt 64/108, Tab 23.
+-- Workspace switcher HUD (io.zet.workspace-switcher) follows Super: holding
+-- Super shows it after a short pause, so a quick Super+key shortcut does not
+-- flash it, and Super+Left/Right/Tab show it at once. Letting go of Super
+-- hides it. Any other key pressed with Super is a shortcut and takes it down;
+-- moving the pointer before the pause ends (Super+drag) keeps it away.
+-- Super+Up/Down and Super+Shift+Left/Right (window focus and swaps) leave an
+-- open HUD up but stop a pending one from appearing.
+-- XKB: Super 133/134, Shift 50/62, Tab 23, Left 113, Right 114, Up 111, Down 116.
+local SWITCHER_DELAY_MS = 250
+local POINTER_SLOP = 4
 local super_keys = { [133] = true, [134] = true }
-local ctrl_keys = { [37] = true, [105] = true }
-local alt_keys = { [64] = true, [108] = true }
+local shift_keys = { [50] = true, [62] = true }
+local arrow_keys = { [113] = true, [114] = true }
 local tab_key = 23
+local window_keys = { [111] = true, [116] = true }
 local super_down = {}
-local ctrl_down = {}
-local alt_down = {}
-local ctrl_alt_switcher_held = false
-local super_switcher_held = false
+local shift_down = {}
+local switcher_generation = 0
+local switcher_shown = false
+local super_press_cursor = nil
 
-local function workspace_switcher_hold()
-  hl.exec_cmd("omarchy-shell -q io.zet.workspace-switcher hold")
+local function cursor_pos()
+  local ok, pos = pcall(hl.get_cursor_pos)
+  if ok and pos and pos.x and pos.y then
+    return { x = pos.x, y = pos.y }
+  end
+  return nil
 end
 
-local function workspace_switcher_hide()
-  hl.exec_cmd("omarchy-shell -q io.zet.workspace-switcher hide")
+local function pointer_moved_since_press()
+  local now = cursor_pos()
+  if not super_press_cursor or not now then
+    return false
+  end
+  return math.abs(now.x - super_press_cursor.x) > POINTER_SLOP
+    or math.abs(now.y - super_press_cursor.y) > POINTER_SLOP
 end
 
-hl.on("input.keyboard.key", function(keycode, _, state)
-  local pressed = (state == 1 or state == 2)
-  local released = (state == 0)
-
-  if ctrl_keys[keycode] then
-    if pressed then
-      ctrl_down[keycode] = true
-    elseif released then
-      ctrl_down[keycode] = nil
-    end
-  elseif alt_keys[keycode] then
-    if pressed then
-      alt_down[keycode] = true
-    elseif released then
-      alt_down[keycode] = nil
-    end
+local function switcher_show()
+  switcher_generation = switcher_generation + 1
+  if not switcher_shown then
+    switcher_shown = true
+    hl.exec_cmd("omarchy-shell -q io.zet.workspace-switcher hold")
   end
+end
 
-  local ctrl_alt_down = next(ctrl_down) ~= nil and next(alt_down) ~= nil
-  if ctrl_alt_down and not ctrl_alt_switcher_held then
-    ctrl_alt_switcher_held = true
-    workspace_switcher_hold()
-  elseif ctrl_alt_switcher_held and not ctrl_alt_down then
-    ctrl_alt_switcher_held = false
-    workspace_switcher_hide()
+local function switcher_hide()
+  switcher_generation = switcher_generation + 1
+  if switcher_shown then
+    switcher_shown = false
+    hl.exec_cmd("omarchy-shell -q io.zet.workspace-switcher hide")
   end
+end
 
+local function switcher_key(keycode, state)
+  if shift_keys[keycode] then
+    shift_down[keycode] = (state ~= 0) or nil
+    return
+  end
   if super_keys[keycode] then
     if state == 1 then
+      local first = next(super_down) == nil
       super_down[keycode] = true
+      if first then
+        switcher_generation = switcher_generation + 1
+        local mine = switcher_generation
+        super_press_cursor = cursor_pos()
+        hl.timer(function()
+          if mine == switcher_generation and next(super_down) ~= nil and not pointer_moved_since_press() then
+            switcher_show()
+          end
+        end, { timeout = SWITCHER_DELAY_MS, type = "oneshot" })
+      end
     elseif state == 0 then
       super_down[keycode] = nil
       if next(super_down) == nil then
-        if super_switcher_held then
-          super_switcher_held = false
-          workspace_switcher_hide()
-        end
+        switcher_hide()
       end
     end
-  elseif pressed and next(super_down) ~= nil then
-    if keycode == tab_key and not super_switcher_held then
-      super_switcher_held = true
-      workspace_switcher_hold()
+  elseif state == 1 and next(super_down) ~= nil then
+    local shifted = next(shift_down) ~= nil
+    if keycode == tab_key or (arrow_keys[keycode] and not shifted) then
+      switcher_show()
+    elseif window_keys[keycode] or arrow_keys[keycode] then
+      switcher_generation = switcher_generation + 1
+    else
+      switcher_hide()
     end
   end
+end
+
+hl.on("input.keyboard.key", function(keycode, _, state)
+  switcher_key(keycode, state)
 end)
 
 -- Start the independent audio backup before Voxtype on either recording key.
@@ -149,17 +177,28 @@ o.bind("SUPER + SHIFT + TAB", "Move window to next occupied workspace", "/home/t
 -- Replace next-monitor focus with the stock former-workspace action.
 hl.unbind("CTRL + ALT + TAB")
 o.bind("CTRL + ALT + TAB", "Former workspace", hl.dsp.focus({ workspace = "previous" }))
--- Select numbered workspaces while holding the workspace overview chord.
+-- Ctrl+Alt+1..0 select numbered workspaces (Super+1..0 are unbound).
 for workspace = 1, 10 do
   local key = "code:" .. tostring(workspace + 9)
   hl.unbind("SUPER + " .. key)
   o.bind("CTRL + ALT + " .. key, "Switch to workspace " .. workspace, hl.dsp.focus({ workspace = tostring(workspace) }))
 end
--- Super+Left/Right and Super+Shift+Left/Right stay stock: focus and swap
--- windows. They stop at the edge of the monitor instead of reaching across:
--- HDMI-A-1 sits left of the laptop, so a swap at the left edge pulled the X
--- window onto the laptop and pushed a laptop window onto HDMI.
+-- Super+Left/Right step to the adjacent numbered workspace (1-10; from HDMI
+-- they return to the laptop). Super+Up/Down take over the stock window focus
+-- that Super+Left/Right had. Super+Shift+Left/Right stay stock window swaps.
+-- Directional focus and swaps stop at the edge of the monitor instead of
+-- reaching across: HDMI-A-1 sits left of the laptop, so a swap at the left
+-- edge pulled the X window onto the laptop and pushed a laptop window onto
+-- HDMI.
 hl.config({ binds = { window_direction_monitor_fallback = false } })
+hl.unbind("SUPER + LEFT")
+hl.unbind("SUPER + RIGHT")
+hl.unbind("SUPER + UP")
+hl.unbind("SUPER + DOWN")
+o.bind("SUPER + LEFT", "Previous workspace", "/home/tyler/.local/bin/zet-workspace-flow left")
+o.bind("SUPER + RIGHT", "Next workspace", "/home/tyler/.local/bin/zet-workspace-flow right")
+o.bind("SUPER + UP", "Focus on left window", hl.dsp.focus({ direction = "l" }))
+o.bind("SUPER + DOWN", "Focus on right window", hl.dsp.focus({ direction = "r" }))
 
 -- Only Super+Alt+X changes what HDMI-A-1 shows. Super+scroll steps the
 -- laptop's workspaces and does nothing over HDMI (stock would step it through
