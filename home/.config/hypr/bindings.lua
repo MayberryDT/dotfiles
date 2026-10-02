@@ -243,6 +243,7 @@ o.bind("SUPER + CTRL + O", "To-do list", "omarchy-shell -q io.zet.todo-list togg
 o.bind("SUPER + CTRL + X", "Post to X", "/home/tyler/.local/bin/zet-x-compose")
 o.bind("SUPER + ALT + X", "HDMI views", "/home/tyler/.local/bin/zet-hdmi-view")
 o.bind("SUPER + ALT + C", "Cue sheet", "/home/tyler/.local/bin/zet-cue-sheet")
+o.bind("SUPER + ALT + A", "Cue sheet answer", "/home/tyler/.local/bin/zet-cue-sheet answer")
 
 -- File Search overlay (localsearch full-text). Replaces Omarchy Find on Alt+Space.
 -- Super+Space is the Omarchy menu.
