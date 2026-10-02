@@ -156,14 +156,25 @@ for workspace = 1, 10 do
   o.bind("CTRL + ALT + " .. key, "Switch to workspace " .. workspace, hl.dsp.focus({ workspace = tostring(workspace) }))
 end
 -- Super+Left/Right and Super+Shift+Left/Right stay stock: focus and swap
--- windows.
+-- windows. They stop at the edge of the monitor instead of reaching across:
+-- HDMI-A-1 sits left of the laptop, so a swap at the left edge pulled the X
+-- window onto the laptop and pushed a laptop window onto HDMI.
+hl.config({ binds = { window_direction_monitor_fallback = false } })
 
--- Only Super+Alt+X changes what HDMI-A-1 shows. Stock Super+scroll steps the
--- workspace under the pointer (on HDMI: hdmi -> hdmi-x -> hdmi-open), and
--- Super+Shift+Alt+Arrow moves a workspace onto or off that monitor.
--- hypr/workspaces.lua catches any other path.
+-- Only Super+Alt+X changes what HDMI-A-1 shows. Super+scroll steps the
+-- laptop's workspaces and does nothing over HDMI (stock would step it through
+-- hdmi -> hdmi-x -> hdmi-open). Super+Shift+Alt+Arrow moved a workspace onto or
+-- off that monitor, so it stays unbound. hypr/workspaces.lua and
+-- hypr/windows.lua catch any other path.
+function zet_super_scroll(step)
+  local monitor = hl.get_monitor_at_cursor()
+  if monitor ~= nil and monitor.name == "HDMI-A-1" then return end
+  hl.dispatch(hl.dsp.focus({ workspace = step }))
+end
 hl.unbind("SUPER + mouse_down")
 hl.unbind("SUPER + mouse_up")
+o.bind("SUPER + mouse_down", "Scroll active workspace forward", function() zet_super_scroll("e+1") end)
+o.bind("SUPER + mouse_up", "Scroll active workspace backward", function() zet_super_scroll("e-1") end)
 for _, direction in ipairs({ "LEFT", "RIGHT", "UP", "DOWN" }) do
   hl.unbind("SUPER + SHIFT + ALT + " .. direction)
 end
