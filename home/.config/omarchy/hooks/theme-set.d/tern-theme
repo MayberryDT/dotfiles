@@ -1,0 +1,17 @@
+#!/bin/bash
+# Copies the palette rendered from ~/.config/omarchy/themed/tern.json.tpl into
+# omp's themes folder as "omarchy". Tern pins that theme (settings.json
+# theme_dark/theme_light) and watches the folder, so open windows repaint.
+set -euo pipefail
+
+source_file=$HOME/.local/state/omarchy/current/theme/tern.json
+themes_dir=$HOME/.omp/agent/themes
+
+# A theme without colors.toml renders no palette; keep the last accepted colors.
+[[ -f $source_file ]] || exit 0
+mkdir -p -- "$themes_dir"
+temporary=$(mktemp "$themes_dir/.omarchy.XXXXXX")
+trap 'rm -f -- "$temporary"' EXIT
+cp -- "$source_file" "$temporary"
+chmod 644 "$temporary"
+mv -f -- "$temporary" "$themes_dir/omarchy.json"
