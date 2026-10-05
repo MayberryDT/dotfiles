@@ -1,36 +1,10 @@
 {
   "bar": {
-    "centerAnchor": "tmn73.calendar",
     "id": "tyler.bar",
+    "position": "top",
+    "transparent": true,
+    "centerAnchor": "tmn73.calendar",
     "layout": {
-      "center": [
-        {
-          "id": "omarchy.keyboard-layout"
-        },
-        {
-          "id": "omarchy.indicators"
-        },
-        {
-          "defaultMode": "L",
-          "expectedYears": 100,
-          "id": "lifetime.time-visualizer",
-          "lifeInputsExpanded": false
-        },
-        {
-          "id": "omarchy.weather"
-        },
-        {
-          "format": "dddd h:mm AP",
-          "hiddenCalendars": [],
-          "id": "tmn73.calendar"
-        },
-        {
-          "id": "omarchy.system-update"
-        },
-        {
-          "id": "omarchy.media"
-        }
-      ],
       "left": [
         {
           "id": "io.github.corck.filesearch"
@@ -42,10 +16,41 @@
           "id": "tyler.menu"
         },
         {
-          "id": "jankeesvw.workspace-name"
+          "id": "tyler.workspaces"
         },
         {
-          "id": "gladimdim.ai-limits"
+          "id": "nixfred.pulse",
+          "barSource": "ram",
+          "cpu.displayMode": 0,
+          "ram.groupByApp": false
+        }
+      ],
+      "center": [
+        {
+          "id": "omarchy.keyboard-layout"
+        },
+        {
+          "id": "omarchy.indicators"
+        },
+        {
+          "id": "lifetime.time-visualizer",
+          "defaultMode": "L",
+          "expectedYears": 100,
+          "lifeInputsExpanded": false
+        },
+        {
+          "id": "omarchy.weather"
+        },
+        {
+          "id": "tmn73.calendar",
+          "format": "dddd h:mm AP",
+          "hiddenCalendars": []
+        },
+        {
+          "id": "omarchy.system-update"
+        },
+        {
+          "id": "omarchy.media"
         }
       ],
       "right": [
@@ -59,23 +64,10 @@
           "id": "omaplug"
         },
         {
-          "id": "omamail"
-        },
-        {
-          "id": "com.omastorm.radar"
-        },
-        {
           "id": "io.zet.todo-list"
         },
         {
-          "id": "co.animasai.rat-detective",
-          "alertAssignmentChanges": true,
-          "alertHumanThreshold": 1,
-          "alertsEnabled": true,
-          "appearance": "Omarchy",
-          "desktopAudio": true,
-          "fullscreen": true,
-          "workspaceEnabled": true
+          "id": "co.animasai.rat-detective"
         },
         {
           "id": "omarchy.agents"
@@ -99,26 +91,53 @@
           "id": "omarchy.power"
         },
         {
-          "id": "nixfred.pulse",
-          "barSource": "ram",
-          "cpu.displayMode": 0,
-          "ram.groupByApp": false
+          "id": "omarchy.microphone"
         },
         {
-          "id": "tyler.notifications"
+          "id": "tyler.scratchpad"
+        },
+        {
+          "id": "jankeesvw.meeting-recorder"
+        },
+        {
+          "id": "tyler.juice"
+        },
+        {
+          "id": "omarchy.notifications"
         }
       ]
     },
-    "position": "top",
-    "transparent": false
+    "modes": {
+      "focus": {
+        "keep": [
+          "io.zet.ibara",
+          "omarchy.media",
+          "omarchy.workspaces",
+          "tyler.juice",
+          "tyler.media",
+          "tyler.notifications",
+          "tyler.workspaces"
+        ]
+      },
+      "meeting": {
+        "promote": [
+          "omarchy.microphone",
+          "jankeesvw.meeting-recorder",
+          "tmn73.calendar"
+        ],
+        "calendar": "tmn73.calendar",
+        "recorder": "jankeesvw.meeting-recorder"
+      },
+      "away": {
+        "minutes": 5,
+        "opacity": 0.15
+      }
+    }
   },
-  "cloneSourceRestores": [
-    "tyler.menu",
-    "tyler.notifications"
-  ],
+  "version": 1,
   "disabledPlugins": [
     "omarchy.menu",
-    "omarchy.notifications"
+    "omarchy.osd"
   ],
   "idle": {
     "lock": 2147483,
@@ -126,28 +145,25 @@
   },
   "plugins": [
     {
-      "audioQuality": "320 kbps",
-      "authBrowser": "Brave Origin",
-      "id": "quickshell.ytmusic",
-      "idleShutdownMinutes": 15,
-      "shortcutPlayer": "Omarchy Music app",
-      "showMiniPlayer": "Off"
-    },
-    {
-      "id": "mirador"
-    },
-    {
-      "id": "io.zet.hdmi-status"
+      "id": "bobbynicholas.omaland"
     },
     {
       "id": "io.zet.workspace-switcher"
     },
     {
-      "id": "bobbynicholas.omaland"
+      "id": "mirador"
+    },
+    {
+      "id": "tyler.moments"
     },
     {
       "id": "tyler.notifications"
+    },
+    {
+      "id": "tyler.osd"
     }
   ],
-  "version": 1
+  "cloneSourceRestores": [
+    "tyler.menu"
+  ]
 }

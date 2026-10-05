@@ -61,3 +61,6 @@ require("hypr.davinci-resolve")
 
 -- Omaroll: opaque window, floating centred viewer. See hypr/omaroll.lua.
 require("hypr.omaroll")
+
+-- Desktop juice (loaded last)
+require("hypr.juice")

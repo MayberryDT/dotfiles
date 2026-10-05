@@ -168,25 +168,36 @@ hl.unbind("SUPER + TAB")
 hl.unbind("SUPER + SHIFT + TAB")
 o.bind("SUPER + TAB", "Next occupied workspace", "/home/tyler/.local/bin/zet-workspace-flow cycle")
 o.bind("SUPER + SHIFT + TAB", "Move window to next occupied workspace", "/home/tyler/.local/bin/zet-workspace-flow cycle move")
--- Replace next-monitor focus with the stock former-workspace action.
+-- Ctrl+Alt+Tab (replacing next-monitor focus) and Super+Ctrl+Tab go back to
+-- the workspace shown before, on both monitors.
 hl.unbind("CTRL + ALT + TAB")
-o.bind("CTRL + ALT + TAB", "Former workspace", hl.dsp.focus({ workspace = "previous" }))
--- Ctrl+Alt+1..0 select numbered workspaces (Super+1..0 are unbound).
+hl.unbind("SUPER + CTRL + TAB")
+o.bind("CTRL + ALT + TAB", "Former workspace", "/home/tyler/.local/bin/zet-workspace-flow previous")
+o.bind("SUPER + CTRL + TAB", "Former workspace", "/home/tyler/.local/bin/zet-workspace-flow previous")
+-- Super+1..0 show that workspace on both monitors; Super+Shift+1..0 send the
+-- focused window there (it stays on its monitor) and follow; add Alt to send
+-- it without following.
 for workspace = 1, 10 do
   local key = "code:" .. tostring(workspace + 9)
   hl.unbind("SUPER + " .. key)
-  o.bind("CTRL + ALT + " .. key, "Switch to workspace " .. workspace, hl.dsp.focus({ workspace = tostring(workspace) }))
+  hl.unbind("SUPER + SHIFT + " .. key)
+  hl.unbind("SUPER + SHIFT + ALT + " .. key)
+  o.bind("SUPER + " .. key, "Switch to workspace " .. workspace, "/home/tyler/.local/bin/zet-workspace-flow goto " .. workspace)
+  o.bind("SUPER + SHIFT + " .. key, "Move window to workspace " .. workspace, "/home/tyler/.local/bin/zet-workspace-flow send " .. workspace)
+  o.bind("SUPER + SHIFT + ALT + " .. key, "Move window silently to workspace " .. workspace, "/home/tyler/.local/bin/zet-workspace-flow send " .. workspace .. " silent")
 end
--- Super+Left/Right step to the adjacent numbered workspace (1-10; from HDMI
--- they return to the laptop). Super+Shift+Left/Right take the focused window
+-- Alt+Tab cycles every window on either monitor's visible workspace.
+hl.unbind("ALT + TAB")
+hl.unbind("ALT + SHIFT + TAB")
+o.bind("ALT + TAB", "Focus on next window (both monitors)", "/home/tyler/.local/bin/zet-workspace-flow windows next")
+o.bind("ALT + SHIFT + TAB", "Focus on previous window (both monitors)", "/home/tyler/.local/bin/zet-workspace-flow windows prev")
+-- Super+Left/Right step to the adjacent numbered workspace (1-10). Super+Shift+Left/Right take the focused window
 -- along. Super+Up/Down take over the stock window focus that Super+Left/Right
 -- had. Super+Shift+Up/Down take over the stock left/right window swaps:
 -- Up swaps right, Down swaps left. Super+Alt+Left/Right also swap left/right,
 -- replacing the stock move-into-group on those two keys.
 -- Directional focus and swaps stop at the edge of the monitor instead of
--- reaching across: HDMI-A-1 sits left of the laptop, so a swap at the left
--- edge pulled the X window onto the laptop and pushed a laptop window onto
--- HDMI.
+-- reaching across to another monitor.
 hl.config({ binds = { window_direction_monitor_fallback = false } })
 hl.unbind("SUPER + LEFT")
 hl.unbind("SUPER + RIGHT")
@@ -206,32 +217,15 @@ o.bind("SUPER + UP", "Focus on left window", hl.dsp.focus({ direction = "l" }))
 o.bind("SUPER + DOWN", "Focus on right window", hl.dsp.focus({ direction = "r" }))
 o.bind("SUPER + SHIFT + UP", "Swap window to the right", hl.dsp.window.swap({ direction = "r" }))
 o.bind("SUPER + SHIFT + DOWN", "Swap window to the left", hl.dsp.window.swap({ direction = "l" }))
-o.bind("SUPER + ALT + LEFT", "Swap window to the left", hl.dsp.window.swap({ direction = "l" }))
-o.bind("SUPER + ALT + RIGHT", "Swap window to the right", hl.dsp.window.swap({ direction = "r" }))
+-- Super+Alt+Left/Right swap with the neighbouring window and, at the edge of a
+-- monitor, carry the window onto the other monitor's half of the workspace.
+o.bind("SUPER + ALT + LEFT", "Swap window left (crosses monitors)", "/home/tyler/.local/bin/zet-workspace-flow shift left")
+o.bind("SUPER + ALT + RIGHT", "Swap window right (crosses monitors)", "/home/tyler/.local/bin/zet-workspace-flow shift right")
 
--- Only Super+Alt+X changes what HDMI-A-1 shows. Super+scroll steps through
--- the occupied numbered workspaces on the laptop and stops at the first and
--- last; over HDMI it does nothing. Hyprland's e+1/e-1 ran past the last laptop
--- workspace onto HDMI's named views. Super+Shift+Alt+Arrow moved a workspace
--- onto or off that monitor, so it stays unbound. hypr/workspaces.lua and
--- hypr/windows.lua catch any other path.
+-- Super+scroll steps both monitors one workspace per notch and stops at 1 and
+-- 10. Super+Shift+Alt+Arrow stays unbound.
 function zet_super_scroll(direction)
-  local monitor = hl.get_monitor_at_cursor()
-  if monitor == nil or monitor.name == "HDMI-A-1" then return end
-  local active = monitor.active_workspace
-  local current = active and active.id or 0
-  if current < 1 or current > 10 then return end
-  local target = nil
-  for _, workspace in ipairs(hl.get_workspaces()) do
-    local id = workspace.id
-    if id >= 1 and id <= 10 and workspace.windows > 0 then
-      if direction > 0 and id > current and (target == nil or id < target) then target = id end
-      if direction < 0 and id < current and (target == nil or id > target) then target = id end
-    end
-  end
-  if target ~= nil then
-    hl.dispatch(hl.dsp.focus({ workspace = tostring(target) }))
-  end
+  hl.exec_cmd("/home/tyler/.local/bin/zet-workspace-flow scroll " .. (direction > 0 and "down" or "up"))
 end
 hl.unbind("SUPER + mouse_down")
 hl.unbind("SUPER + mouse_up")
@@ -246,7 +240,6 @@ end
 hl.unbind("SUPER + CTRL + O")
 o.bind("SUPER + CTRL + O", "To-do list", "omarchy-shell -q io.zet.todo-list toggle")
 o.bind("SUPER + CTRL + X", "Post to X", "/home/tyler/.local/bin/zet-x-compose")
-o.bind("SUPER + ALT + X", "HDMI views", "/home/tyler/.local/bin/zet-hdmi-view")
 o.bind("SUPER + ALT + C", "Cue sheet", "/home/tyler/.local/bin/zet-cue-sheet")
 o.bind("SUPER + ALT + A", "Cue sheet answer", "/home/tyler/.local/bin/zet-cue-sheet answer")
 

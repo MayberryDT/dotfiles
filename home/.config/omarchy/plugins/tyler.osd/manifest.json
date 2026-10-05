@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "tyler.osd",
+  "name": "On-screen display (dials)",
+  "version": "1.0.0",
+  "author": "Tyler Mayberry",
+  "description": "Omarchy's OSD with volume and brightness drawn as an instrument dial. Same IPC and payloads as omarchy.osd.",
+  "kinds": [
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "panel": "Osd.qml"
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.osd"
+  }
+}

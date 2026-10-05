@@ -1,0 +1,7 @@
+#!/bin/bash
+# Theme changed ($1 = theme name).
+# The sweep and its sound: tyler.moments normally plays them already, the
+# moment the shell swaps palettes; this call covers a theme whose palette did
+# not change and is skipped by the service when the moment already played.
+omarchy-shell -q tyler.moments flash theme
+exit 0

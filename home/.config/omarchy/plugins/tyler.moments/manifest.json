@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "tyler.moments",
+  "name": "Desktop moments",
+  "version": "0.1.0",
+  "author": "Tyler Mayberry",
+  "description": "Theme-change sweep, screenshot edge flash and the screenshot thumbnail that can be sent to an agent.",
+  "kinds": [
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml"
+  }
+}

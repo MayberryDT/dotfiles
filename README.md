@@ -28,6 +28,15 @@ The Voxtype keybindings use `~/.local/bin/voxtype-backup` to save local FLAC
 audio during dictation. The helper is included; recordings under
 `~/.local/share/voxtype/recordings/` are private runtime data and are excluded.
 
+The numbered-workspace keys use `~/.local/bin/zet-workspace-flow`, which is
+included. Each workspace number spans two monitors: Hyprland workspace N on the
+left monitor and N+10 on the right, switched together.
+`.config/hypr/workspaces.lua` names the two outputs (`eDP-2`, `HDMI-A-1`)
+for their starting workspaces; change them to match your hardware. The
+`tyler.workspaces` bar indicator calls the same helper. The switcher overlay it
+refreshes (`io.zet.workspace-switcher`) is not part of this mirror; without it,
+the helper still works.
+
 ## Layout
 
 Files under `home/` mirror paths relative to `$HOME`. Review every file before

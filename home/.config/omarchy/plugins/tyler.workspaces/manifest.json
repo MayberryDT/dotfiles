@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "tyler.workspaces",
+  "name": "My Workspaces",
+  "version": "1.0.0",
+  "author": "Omarchy",
+  "description": "Workspace indicators showing each workspace's main app icon, with names derived from what is running and a Super-hold peek.",
+  "kinds": [
+    "bar-widget",
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "Workspaces.qml",
+    "overlay": "Hub.qml"
+  },
+  "barWidget": {
+    "displayName": "Workspaces",
+    "description": "App icons per workspace; names in the tooltip and on a Super-hold peek",
+    "category": "Compositor",
+    "defaultSection": "left",
+    "allowMultiple": false,
+    "defaults": {
+      "alwaysShown": 5
+    },
+    "schema": [
+      {
+        "key": "alwaysShown",
+        "type": "integer",
+        "label": "Workspaces always shown",
+        "min": 1,
+        "max": 10,
+        "step": 1,
+        "defaultValue": 5,
+        "description": "How many workspaces stand on the bar whether or not they exist yet. Higher ones that exist are added up to ten."
+      }
+    ]
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.workspaces"
+  }
+}

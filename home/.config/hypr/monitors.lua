@@ -6,23 +6,12 @@ local omarchy_monitor_scale = 1
 
 hl.env("GDK_SCALE", tostring(omarchy_gdk_scale))
 
--- Laptop stays at origin. HDMI is physically to the left, so the cursor
--- leaves the laptop on the left edge.
+-- Laptop at origin; any external monitor lands automatically beside it.
 hl.monitor({
   output = "eDP-2",
   mode = "preferred",
   position = "0x0",
   scale = omarchy_monitor_scale,
-})
--- CPO Ingnok is physically rotated 90° clockwise (portrait).
--- After transform the logical size is 1080x1920, so it sits at -1080x0
--- with the extra height hanging below the laptop.
-hl.monitor({
-  output = "HDMI-A-1",
-  mode = "preferred",
-  position = "-1080x0",
-  scale = omarchy_monitor_scale,
-  transform = 1,
 })
 
 -- Unknown plugs still land automatically.

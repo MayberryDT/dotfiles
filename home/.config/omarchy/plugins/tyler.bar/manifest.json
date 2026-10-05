@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "tyler.bar",
   "name": "My Bar",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "author": "Omarchy",
   "description": "Status bar with widgets",
   "kinds": [

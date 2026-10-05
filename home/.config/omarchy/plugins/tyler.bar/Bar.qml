@@ -1,12 +1,17 @@
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
+import Quickshell.Services.SystemTray
 import Quickshell.Wayland
 import QtQuick
+import QtQuick.Effects
 import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 import "BarModel.js" as BarModel
+import "Attention.js" as Attention
+import "widgets/KeyboardLayoutModel.js" as KeyboardLayoutModel
+import "../tyler.juice/Motion.js" as Motion
 
 Item {
   id: root
@@ -95,6 +100,373 @@ Item {
   property var barMoveScreen: null
   property var clickTargets: []
   property var moduleSlots: []
+
+  // ------------------------------------------------------------------ juice
+  //
+  // Drawers (`bar.drawers`): one quiet mark per group; members fold away
+  // inline and come back out while they are in trouble or have news. Modes
+  // (`bar.modes` + the juice state bus): focus, meeting and away. Power-up:
+  // widgets appear left to right once per login. See README "Juice".
+  property var drawers: ({})
+  property var drawerOfId: ({})
+  property var modes: BarModel.normalizeModes(null)
+  // Fold/unfold rhythm: the whole stagger across a drawer fits in this.
+  readonly property int drawerRhythm: 150
+  readonly property int powerUpSpan: 800
+  readonly property string juiceRuntimeDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/tyler-juice"
+  property bool juiceRuntimeReady: false
+  property var bus: ({})
+  property bool busLoaded: false
+  property var fake: Attention.parseFake("")
+  property string fakeText: ""
+  readonly property string motionMode: bus && bus.motion === "reduced" ? "reduced" : "full"
+  readonly property bool reducedMotion: motionMode === "reduced"
+  readonly property bool focusOn: fake.focus || !!(bus && bus.focus && bus.focus.on === true)
+  // Meeting: a running calendar meeting, a live Meeting Recorder session, or
+  // anything that publishes `meeting.on` on the state bus.
+  property double meetingClock: Date.now()
+  readonly property bool calendarMeeting: {
+    var now = root.meetingClock
+    var id = root.modes.meeting.calendar
+    for (var i = 0; i < root.moduleSlots.length; i++) {
+      var slot = root.moduleSlots[i]
+      if (!slot || slot.moduleName !== id || !slot.activeItem) continue
+      if (Attention.meetingNow(slot.activeItem.visibleEventList, now)) return true
+    }
+    return false
+  }
+  readonly property bool recorderMeeting: {
+    var id = root.modes.meeting.recorder
+    for (var i = 0; i < root.moduleSlots.length; i++) {
+      var slot = root.moduleSlots[i]
+      if (slot && slot.moduleName === id && slot.activeItem && slot.activeItem.recorderState === "recording") return true
+    }
+    return false
+  }
+  readonly property bool busMeeting: !!(bus && bus.meeting && bus.meeting.on === true)
+  readonly property bool meetingOn: modes.meeting.enabled && (fake.meeting || busMeeting || calendarMeeting || recorderMeeting)
+  readonly property bool awayOn: modes.away.enabled && (fake.away || awayMonitor.isIdle)
+  property real awayLevel: awayOn ? 1 : 0
+  Behavior on awayLevel {
+    NumberAnimation { duration: Motion.duration(Motion.settle, root.motionMode); easing.type: Easing.InOutCubic }
+  }
+  readonly property real awayOpacity: 1 - awayLevel * (1 - modes.away.opacity)
+
+  // ---- sounds the bar is first to know ----
+  readonly property string juiceSoundBin: (Quickshell.env("HOME") || "") + "/.local/bin/juice-sound"
+  function juiceSound(name) {
+    Quickshell.execDetached([juiceSoundBin, name])
+  }
+  // juice-sound keeps quiet during a meeting, and meetings are known here.
+  function syncMeetingFlag() {
+    if (!juiceRuntimeReady) return
+    Quickshell.execDetached(meetingOn ? ["touch", juiceRuntimeDir + "/meeting"] : ["rm", "-f", juiceRuntimeDir + "/meeting"])
+  }
+  onMeetingOnChanged: syncMeetingFlag()
+  onJuiceRuntimeReadyChanged: syncMeetingFlag()
+  onAwayOnChanged: if (!awayOn) juiceSound("welcome")
+  // The day's first login gets a chord as the bar powers up.
+  function loginChord() {
+    var stamp = (Quickshell.env("XDG_STATE_HOME") || ((Quickshell.env("HOME") || "") + "/.local/state")) + "/tyler-juice/last-login-day"
+    Quickshell.execDetached(["sh", "-c",
+      "d=$(date +%F); [ \"$(cat \"$1\" 2>/dev/null)\" = \"$d\" ] && exit 0; "
+      + "mkdir -p \"$(dirname \"$1\")\" && echo \"$d\" > \"$1\" && exec \"$2\" login",
+      "sh", stamp, juiceSoundBin])
+  }
+  // Ibara: a sound when more starts waiting for Tyler, another when a task ends.
+  readonly property var ibaraService: {
+    for (var i = 0; i < moduleSlots.length; i++) {
+      var slot = moduleSlots[i]
+      if (slot && slot.moduleName === "io.zet.ibara" && slot.activeItem && slot.activeItem.ibaraService)
+        return slot.activeItem.ibaraService
+    }
+    return null
+  }
+  readonly property int ibaraNeeds: ibaraService ? Number(ibaraService.needsYouCount || 0) : 0
+  property int ibaraNeedsSeen: 0
+  property bool ibaraSettled: false
+  onIbaraServiceChanged: { ibaraSettled = false; ibaraSettle.restart() }
+  onIbaraNeedsChanged: {
+    if (ibaraSettled && ibaraNeeds > ibaraNeedsSeen) juiceSound("ibara-ask")
+    ibaraNeedsSeen = ibaraNeeds
+  }
+  Timer {
+    id: ibaraSettle
+    // Ibara reports what was already waiting as it connects; that is not news.
+    interval: 5000
+    onTriggered: { root.ibaraNeedsSeen = root.ibaraNeeds; root.ibaraSettled = true }
+  }
+  Connections {
+    target: root.ibaraService
+    ignoreUnknownSignals: true
+    function onTaskDone(computerId) { if (root.ibaraSettled) root.juiceSound("ibara-done") }
+  }
+
+  // "pending" keeps widgets hidden until the login marker has been checked,
+  // "run" plays the power-up, "done" shows everything as it is created.
+  property string powerUpPhase: "pending"
+  property var keyboardState: ({ index: 0, keymap: "" })
+  property string keyboardProbeName: ""
+  property bool keyboardProbePending: false
+  readonly property var attentionContext: ({ keyboard: root.keyboardState, trayNeedsAttention: Status.NeedsAttention })
+  property int slotSerial: 0
+
+  function drawerSpec(id) {
+    return drawers[String(id || "")] || null
+  }
+
+  function drawerFor(id) {
+    return drawerOfId[String(id || "")] || ""
+  }
+
+  function focusKeeps(id) {
+    return id === centerAnchor || modes.focus.keep.indexOf(id) !== -1
+  }
+
+  function meetingPromotes(id) {
+    return modes.meeting.promote.indexOf(id) !== -1
+  }
+
+  function fakeLevel(id) {
+    return fake.levels[String(id || "")] || 0
+  }
+
+  function slotForItem(item) {
+    for (var i = 0; i < moduleSlots.length; i++) {
+      if (moduleSlots[i] && moduleSlots[i].activeItem === item) return moduleSlots[i]
+    }
+    return null
+  }
+
+  function readBus(text) {
+    try {
+      var data = JSON.parse(String(text || ""))
+      if (!Util.isPlainObject(data)) return
+      bus = data
+      busLoaded = true
+    } catch (e) {
+      // Keep the last good state; the writer replaces the file atomically, so a
+      // bad read is a hand edit or a partial copy and the next change fixes it.
+    }
+  }
+
+  function readFake(text) {
+    var value = String(text || "")
+    if (value === fakeText) return
+    fakeText = value
+    fake = Attention.parseFake(value)
+  }
+
+  function resolvePowerUp(firstThisLogin) {
+    if (powerUpPhase !== "pending" || powerUpStartTimer.running) return
+    // Only now write the marker, so the read above can never see our own write.
+    juiceRuntimeSetup.running = true
+    if (!firstThisLogin || reducedMotion) {
+      powerUpPhase = "done"
+      return
+    }
+    powerUpStartTimer.start()
+  }
+
+  function probeKeyboard(namedKeyboard) {
+    keyboardProbeName = String(namedKeyboard || "")
+    if (keyboardProbe.running) keyboardProbePending = true
+    else keyboardProbe.running = true
+  }
+
+  function readKeyboards(text) {
+    var listed
+    try {
+      listed = JSON.parse(text || "{}").keyboards
+    } catch (e) {
+      return
+    }
+    if (!Array.isArray(listed)) return
+    var typed = listed.filter(function(k) { return KeyboardLayoutModel.isTypedKeyboard(k.name) })
+    var kb = KeyboardLayoutModel.selectKeyboard(typed, keyboardProbeName)
+    var index = kb ? KeyboardLayoutModel.layoutIndex(kb) : 0
+    var keymap = kb ? String(kb.active_keymap || "") : ""
+    if (index !== keyboardState.index || keymap !== keyboardState.keymap)
+      keyboardState = { index: index, keymap: keymap }
+  }
+
+  // How long `drawer <id> open` keeps a drawer out with no pointer on it.
+  readonly property int drawerKeyboardDwell: 4000
+
+  function commandDrawer(id, action) {
+    var name = String(id || "")
+    var verb = String(action || "toggle")
+    if (!drawerSpec(name)) return { error: "no drawer named " + name }
+    if (["open", "close", "toggle", "pin"].indexOf(verb) === -1) return { error: "action must be open, close, toggle or pin" }
+
+    // The mark on the focused monitor's bar, else any bar showing one.
+    var focused = focusedScreenName()
+    var markSlot = null
+    for (var i = 0; i < moduleSlots.length; i++) {
+      var slot = moduleSlots[i]
+      if (!slot || slot.moduleName !== name || !slot.isDrawerMark || !slot.hub) continue
+      if (!markSlot || (focused && slotScreenName(slot) === focused)) markSlot = slot
+    }
+    if (!markSlot) return { error: "drawer " + name + " has no mark on any bar" }
+
+    var hub = markSlot.hub
+    if (verb === "toggle") verb = hub.isOpen(name) ? "close" : "open"
+    if (verb === "open") hub.openFor(name, drawerKeyboardDwell)
+    else if (verb === "close") hub.close(name)
+    else hub.pin(name)
+    return { drawer: name, screen: slotScreenName(markSlot), open: hub.isOpen(name), pinned: hub.isPinned(name) }
+  }
+
+  function juiceSnapshot() {
+    var slots = []
+    for (var i = 0; i < moduleSlots.length; i++) {
+      var slot = moduleSlots[i]
+      if (!slot) continue
+      slots.push({
+        id: slot.moduleName,
+        screen: slotScreenName(slot),
+        drawer: slot.isDrawerMark ? "(mark)" : slot.drawerName,
+        attention: slot.attentionLevel,
+        reason: slot.attentionReason,
+        drawn: BarModel.isDrawnSlot(slot)
+      })
+    }
+    return {
+      motion: motionMode,
+      focus: focusOn,
+      meeting: meetingOn,
+      meetingSources: { calendar: calendarMeeting, recorder: recorderMeeting, bus: busMeeting, fake: fake.meeting },
+      away: awayOn,
+      powerUp: powerUpPhase,
+      keyboard: keyboardState,
+      fake: fake,
+      slots: slots
+    }
+  }
+
+  // Once per login: the marker lives in XDG_RUNTIME_DIR, which logind clears
+  // when the session ends, so a shell reload or restart never replays it.
+  // Read synchronously so a reload has its answer before the first frame.
+  FileView {
+    path: root.juiceRuntimeDir + "/bar-powered-up"
+    blockLoading: true
+    printErrors: false
+    onLoaded: root.resolvePowerUp(false)
+    onLoadFailed: root.resolvePowerUp(true)
+  }
+
+  // Creates the runtime directory (so the watchers below have something to
+  // watch) and the power-up marker. Paths travel as arguments, not as script.
+  Process {
+    id: juiceRuntimeSetup
+    command: ["sh", "-c", "mkdir -p -- \"$1\" && { [ -e \"$2\" ] || : > \"$2\"; }", "sh",
+      root.juiceRuntimeDir, root.juiceRuntimeDir + "/bar-powered-up"]
+    onExited: root.juiceRuntimeReady = true
+  }
+
+  Timer {
+    id: powerUpStartTimer
+    // Let the widgets size themselves first so each one's place along the
+    // bar, which sets its moment, is where it will actually sit.
+    interval: 350
+    onTriggered: {
+      root.loginChord()
+      if (root.reducedMotion) {
+        root.powerUpPhase = "done"
+        return
+      }
+      root.powerUpPhase = "run"
+      powerUpDoneTimer.start()
+    }
+  }
+
+  Timer {
+    id: powerUpDoneTimer
+    interval: root.powerUpSpan + 600
+    onTriggered: root.powerUpPhase = "done"
+  }
+
+  // Belt and braces: never leave the bar blank if the marker read never answers.
+  Timer {
+    interval: 2000
+    running: root.powerUpPhase === "pending"
+    onTriggered: if (root.powerUpPhase === "pending" && !powerUpStartTimer.running) root.resolvePowerUp(false)
+  }
+
+  FileView {
+    id: busView
+    path: root.juiceRuntimeDir + "/state.json"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.readBus(text())
+  }
+
+  // Test hook: { "<widget id>": 0|1|2, "@meeting": true, "@focus": true,
+  // "@away": true }. Read only while the file exists; delete it to go back.
+  FileView {
+    id: fakeView
+    path: root.juiceRuntimeDir + "/fake-attention.json"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.readFake(text())
+    onLoadFailed: root.readFake("")
+  }
+
+  // A file watch cannot see a file appear, so watch the directory for the
+  // state bus arriving after the bar and for the test hook being created.
+  FileView {
+    path: root.juiceRuntimeReady ? root.juiceRuntimeDir : ""
+    watchChanges: true
+    printErrors: false
+    onFileChanged: {
+      busView.reload()
+      fakeView.reload()
+    }
+  }
+
+  // Directory watches can go quiet after bursts of changes (see bar-off
+  // below); a slow re-read keeps the test hook and a late bus honest.
+  Timer {
+    interval: 4000
+    running: true
+    repeat: true
+    onTriggered: {
+      if (!root.busLoaded) busView.reload()
+      fakeView.reload()
+    }
+  }
+
+  Timer {
+    interval: 30000
+    running: root.modes.meeting.enabled
+    repeat: true
+    onTriggered: root.meetingClock = Date.now()
+  }
+
+  IdleMonitor {
+    id: awayMonitor
+    enabled: root.modes.away.enabled
+    timeout: Math.round(root.modes.away.minutes * 60)
+    respectInhibitors: true
+  }
+
+  // The keyboard widget shows the active keymap's name but not whether it is
+  // the first (default) layout; ask Hyprland each time that name changes.
+  Process {
+    id: keyboardProbe
+    command: ["hyprctl", "-j", "devices"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.readKeyboards(text)
+    }
+    onExited: {
+      if (!root.keyboardProbePending) return
+      root.keyboardProbePending = false
+      keyboardProbe.running = true
+    }
+  }
 
   function registerClickTarget(target) {
     if (!target || clickTargets.indexOf(target) !== -1) return
@@ -353,6 +725,11 @@ Item {
     position = normalizePosition(config.position)
     setRequestedTransparency(config.transparent === true)
     centerAnchor = Util.canonicalWidgetId(config.centerAnchor || "")
+    // Drawers and modes sit beside the layout, so they apply before the
+    // settings-only shortcut below returns.
+    drawers = BarModel.normalizeDrawers(config.drawers)
+    drawerOfId = BarModel.drawerMembership(drawers)
+    modes = BarModel.normalizeModes(config.modes)
 
     // layoutEntries feeds plain JS arrays to the module Repeaters, and QML
     // cannot diff those: reassigning layoutConfig rebuilds every widget on
@@ -513,6 +890,13 @@ Item {
   function summonBarWidget(pluginId) {
     var item = findPanelWidget(pluginId)
     if (!item || typeof item.open !== "function") return false
+    // A member folded into its drawer (or hidden by focus) has no size to
+    // anchor a panel on. Unfold it first, then open.
+    var slot = slotForItem(item)
+    if (slot && typeof slot.revealThenOpen === "function" && !BarModel.isDrawnSlot(slot)) {
+      slot.revealThenOpen()
+      return true
+    }
     item.open()
     return true
   }
@@ -747,6 +1131,7 @@ Item {
   function moduleTargetClickable(target) {
     return target
       && target.visible !== false
+      && target.enabled !== false
       && target.opacity !== 0
       && target.interactive !== false
       && target.pressable !== false
@@ -754,17 +1139,21 @@ Item {
       && typeof target.triggerPress === "function"
   }
 
+  function itemInside(item, ancestor) {
+    for (var p = item; p; p = p.parent) if (p === ancestor) return true
+    return false
+  }
+
   function moduleClickTargetAt(slot, localX, localY) {
-    // clickTargets is shared across every bar surface. The unmapped HDMI
-    // clone still registers chips, and mapToItem across those windows can
-    // treat the hidden calendar as overlapping the laptop's left icons.
-    // Only hit-test chips that belong to this slot's window, and keep the
-    // right/bottom edges exclusive so a neighbor cannot steal the boundary.
-    var slotWin = root.slotWindow(slot)
+    // clickTargets is shared across every slot and bar surface, and hit
+    // testing ignores clipping: a widget folded into a drawer keeps its full
+    // size inside a zero-width slot, overlapping its neighbours. Only a
+    // target inside the clicked slot may take the click (enabled is false
+    // while folded), and the right/bottom edges stay exclusive.
     for (var i = clickTargets.length - 1; i >= 0; i--) {
       var target = clickTargets[i]
       if (!moduleTargetClickable(target)) continue
-      if (slotWin && !root.targetBelongsToWindow(target, slotWin)) continue
+      if (!itemInside(target, slot)) continue
 
       var targetPoint = { x: localX, y: localY }
       try {
@@ -963,6 +1352,21 @@ Item {
     function syncHidden(): void {
       barHiddenProbe.running = true
     }
+
+    // Juice diagnostics for testing: modes, power-up and each slot's drawer
+    // and attention. `omarchy-shell omarchy.bar juice`
+    function juice(): string {
+      return JSON.stringify(root.juiceSnapshot())
+    }
+
+    // Drive a drawer without a pointer (tests, keybindings). Acts on the
+    // focused monitor's bar. open: unfolds, then folds again after the
+    // keyboard dwell unless the pointer or a pin holds it. close: unpins and
+    // folds. toggle: open or close. pin: pins it open.
+    // `omarchy-shell omarchy.bar drawer tyler.systems toggle`
+    function drawer(id: string, action: string): string {
+      return JSON.stringify(root.commandDrawer(id, action))
+    }
   }
 
   Variants {
@@ -1011,12 +1415,8 @@ Item {
     // reveal has to rebuild them — new surface, re-shaped glyphs, re-uploaded
     // textures — which measures ~150ms against ~20ms to tear down. Parking
     // keeps the surface alive, so showing is only a margin change.
-    // HDMI is the status board: do not map a bar there. Laptop bar is unchanged.
-    // Also skip building HDMI widgets. An unmapped surface still registers
-    // global clickTargets, and the hidden calendar stole laptop Omamin/menu clicks.
-    readonly property bool hdmiOutput: String((barWindow.screen && barWindow.screen.name) || "").indexOf("HDMI") === 0
-    visible: !remapGuard.remapping && !hdmiOutput
-    exclusionMode: (root.barHidden || hdmiOutput) ? ExclusionMode.Ignore : ExclusionMode.Auto
+    visible: !remapGuard.remapping
+    exclusionMode: root.barHidden ? ExclusionMode.Ignore : ExclusionMode.Auto
 
     ScreenMoveRemap {
       id: remapGuard
@@ -1039,15 +1439,20 @@ Item {
 
     implicitWidth: root.vertical ? root.barSize : 0
     implicitHeight: root.vertical ? 0 : root.barSize
-    color: root.transparent ? "transparent" : root.background
+    color: root.transparent ? "transparent"
+      : Qt.rgba(root.background.r, root.background.g, root.background.b, root.background.a * root.awayOpacity)
     surfaceFormat.opaque: false
     WlrLayershell.namespace: "omarchy-bar"
     WlrLayershell.layer: WlrLayer.Top
 
+    // Per-surface drawer state: hovering one monitor's mark leaves the others be.
+    DrawerHub { id: drawerHub }
+
     Loader {
       anchors.fill: parent
-      active: !barWindow.hdmiOutput
       sourceComponent: root.vertical ? verticalBar : horizontalBar
+      // Away: the whole bar fades right down until the next input.
+      opacity: root.awayOpacity
 
       // A child of the loader, not a sibling of the sections: an ancestor stays
       // hovered while the pointer is over a widget, where a sibling would lose
@@ -1130,15 +1535,17 @@ Item {
       Item {
         anchors.fill: parent
 
-        CenterModules { anchors.fill: parent }
+        CenterModules { anchors.fill: parent; hub: drawerHub }
 
         LeftModules {
+          hub: drawerHub
           anchors.left: parent.left
           anchors.leftMargin: Style.space(8)
           anchors.verticalCenter: parent.verticalCenter
         }
 
         RightModules {
+          hub: drawerHub
           anchors.right: parent.right
           anchors.rightMargin: Style.space(8)
           anchors.verticalCenter: parent.verticalCenter
@@ -1152,15 +1559,17 @@ Item {
       Item {
         anchors.fill: parent
 
-        CenterModules { anchors.fill: parent }
+        CenterModules { anchors.fill: parent; hub: drawerHub }
 
         LeftModules {
+          hub: drawerHub
           anchors.top: parent.top
           anchors.topMargin: Style.space(8)
           anchors.horizontalCenter: parent.horizontalCenter
         }
 
         RightModules {
+          hub: drawerHub
           anchors.bottom: parent.bottom
           anchors.bottomMargin: Style.space(8)
           anchors.horizontalCenter: parent.horizontalCenter
@@ -1312,6 +1721,7 @@ Item {
     id: centerRoot
 
     property var entries: root.layoutEntries("center")
+    property var hub: null
     readonly property bool hasAnchor: root.entryIndex(entries, root.centerAnchor) !== -1
     readonly property var anchorEntry: root.findCenterAnchorEntry()
 
@@ -1336,6 +1746,7 @@ Item {
           visible: !centerRoot.hasAnchor
           entries: centerRoot.entries
           region: "center"
+          hub: centerRoot.hub
           anchors.centerIn: parent
         }
 
@@ -1343,6 +1754,7 @@ Item {
           visible: centerRoot.hasAnchor
           entries: root.entriesBefore(centerRoot.entries, root.centerAnchor)
           region: "center"
+          hub: centerRoot.hub
           anchors.right: centerAnchorModule.left
           anchors.verticalCenter: centerAnchorModule.verticalCenter
         }
@@ -1352,6 +1764,7 @@ Item {
           visible: centerRoot.hasAnchor
           entry: centerRoot.anchorEntry
           region: "center"
+          hub: centerRoot.hub
           anchors.centerIn: parent
         }
 
@@ -1359,6 +1772,7 @@ Item {
           visible: centerRoot.hasAnchor
           entries: root.entriesAfter(centerRoot.entries, root.centerAnchor)
           region: "center"
+          hub: centerRoot.hub
           anchors.left: centerAnchorModule.right
           anchors.verticalCenter: centerAnchorModule.verticalCenter
         }
@@ -1381,6 +1795,7 @@ Item {
           visible: !centerRoot.hasAnchor
           entries: centerRoot.entries
           region: "center"
+          hub: centerRoot.hub
           anchors.centerIn: parent
         }
 
@@ -1388,6 +1803,7 @@ Item {
           visible: centerRoot.hasAnchor
           entries: root.entriesBefore(centerRoot.entries, root.centerAnchor)
           region: "center"
+          hub: centerRoot.hub
           anchors.bottom: centerAnchorModule.top
           anchors.horizontalCenter: centerAnchorModule.horizontalCenter
         }
@@ -1397,6 +1813,7 @@ Item {
           visible: centerRoot.hasAnchor
           entry: centerRoot.anchorEntry
           region: "center"
+          hub: centerRoot.hub
           anchors.centerIn: parent
         }
 
@@ -1404,6 +1821,7 @@ Item {
           visible: centerRoot.hasAnchor
           entries: root.entriesAfter(centerRoot.entries, root.centerAnchor)
           region: "center"
+          hub: centerRoot.hub
           anchors.top: centerAnchorModule.bottom
           anchors.horizontalCenter: centerAnchorModule.horizontalCenter
         }
@@ -1498,6 +1916,8 @@ Item {
 
     property var entries: []
     property string region: ""
+    // The bar surface's DrawerHub, handed to every slot in the list.
+    property var hub: null
 
     visible: entries.length > 0
     // A hidden list must not build its modules. The center section declares
@@ -1523,6 +1943,7 @@ Item {
             required property var modelData
             entry: modelData
             region: moduleListRoot.region
+            hub: moduleListRoot.hub
           }
         }
       }
@@ -1541,6 +1962,7 @@ Item {
             required property var modelData
             entry: modelData
             region: moduleListRoot.region
+            hub: moduleListRoot.hub
           }
         }
       }
@@ -1552,20 +1974,29 @@ Item {
 
     required property var entry
     property string region: ""
+    // The bar surface's DrawerHub (null only for a slot built outside a bar).
+    property var hub: null
     readonly property string moduleName: root.entryId(entry)
     readonly property var moduleSettings: root.entrySettings(entry)
     readonly property string customType: root.customModuleType(entry)
+    // A layout entry whose id names a drawer in `bar.drawers` is that drawer's
+    // mark, drawn by the engine rather than loaded from the registry.
+    readonly property var drawerSpec: root.drawerSpec(moduleName)
+    readonly property bool isDrawerMark: drawerSpec !== null
+    // Engine-drawn widgets that need no plugin of their own.
+    readonly property bool isScratchpad: moduleName === "tyler.scratchpad"
+    readonly property bool engineDrawn: isDrawerMark || isScratchpad
     // Re-evaluate when the registry mutates (Component reference changes,
     // plugin enabled/disabled, etc.). Reading the `widgets` property creates
     // the binding dependency — the wrapped function call alone wouldn't.
     readonly property var registryComponent: {
       var w = root.barWidgetRegistry.widgets
-      if (customType) return null
+      if (customType || engineDrawn) return null
       var registryName = root.canonicalWidgetId(moduleName)
       return w[registryName] ? w[registryName].component : null
     }
-    readonly property bool qmlCustom: customType === "qml"
-    readonly property bool commandCustom: customType === "command"
+    readonly property bool qmlCustom: customType === "qml" && !engineDrawn
+    readonly property bool commandCustom: customType === "command" && !engineDrawn
     readonly property bool registered: registryComponent !== null
     readonly property var activeItem: {
       if (registered) return registryLoader.item
@@ -1585,16 +2016,251 @@ Item {
       if (hint !== undefined && hint !== null && hint > 0) return Math.round(hint)
       return Math.max(Style.space(10), Math.round((root.vertical ? slot.height : slot.width) * 0.55))
     }
-    implicitWidth: activeItem && activeItem.visible ? (root.vertical ? root.barSize : activeItem.implicitWidth) : 0
-    implicitHeight: activeItem && activeItem.visible ? activeItem.implicitHeight : 0
+
+    // ---- juice: drawer membership, attention and modes ----
+    property int serial: 0
+    // Drawer and mode changes apply without animating until the slot has been
+    // up for a moment: a reload must not replay every drawer folding shut.
+    property bool settled: false
+    readonly property string drawerName: isDrawerMark ? "" : root.drawerFor(moduleName)
+    readonly property string hubKey: isDrawerMark ? "mark:" + moduleName : (drawerName ? "member:" + drawerName : "")
+    property string registeredHubKey: ""
+    property var registeredHub: null
+    readonly property int layoutIndex: root.entryIndex(root.layoutEntries(region), moduleName)
+    readonly property var attention: isDrawerMark ? ({ level: 0, reason: "" })
+      : Attention.evaluate(moduleName, activeItem, root.attentionContext)
+    readonly property int attentionRaw: Math.max(attention.level, root.fakeLevel(moduleName))
+    // Settled attention. A rise waits out a short debounce so a service still
+    // starting up (no network device yet, no default sink yet) never flashes
+    // trouble; a fall applies at once.
+    property int attentionLevel: 0
+    readonly property string attentionReason: attention.reason !== "" ? attention.reason
+      : (root.fakeLevel(moduleName) > 0 ? "Test hook (fake-attention.json)" : "")
+    readonly property bool meetingPromoted: root.meetingOn && root.meetingPromotes(moduleName)
+    // Summoned by hotkey or IPC while folded away: unfold, then open.
+    property bool summoned: false
+    readonly property bool held: panelOpen || summoned || dragSource
+    readonly property bool drawerLive: drawerName !== "" && !!hub && hub.hasMark(drawerName)
+    readonly property bool drawerShown: {
+      if (isDrawerMark) return !!hub && hub.memberSlots(moduleName).length > 0
+      if (!drawerLive) return true
+      return held || attentionLevel > 0 || meetingPromoted || hub.isOpen(drawerName)
+    }
+    readonly property bool modeShown: {
+      if (!root.focusOn) return true
+      if (isDrawerMark) return false
+      return held || attentionLevel > 0 || meetingPromoted || root.focusKeeps(moduleName)
+    }
+    // Hovering (or holding a panel open from) a mark or a shown member keeps
+    // an already open drawer open; letting go starts the hub's grace delay.
+    // Hover never opens one: only a click on the mark (or IPC) does, so a
+    // pointer passing along the bar leaves the layout where it is.
+    readonly property bool holdsDrawer: hubKey !== "" && !!hub && hub.isOpen(hubName())
+      && (moduleHover.hovered || panelOpen || summoned)
+    property real drawerExtent: 1
+    property real drawerFade: 1
+    property real modeLevel: 1
+    property real powerLevel: root.powerUpPhase === "done" ? 1 : 0
+    readonly property real axisFactor: drawerExtent * modeLevel
+    readonly property real fullWidth: activeItem && activeItem.visible ? (root.vertical ? root.barSize : activeItem.implicitWidth) : 0
+    readonly property real fullHeight: activeItem && activeItem.visible ? activeItem.implicitHeight : 0
+
+    // Folding runs along the bar: widths on a horizontal bar, heights on a
+    // vertical one.
+    implicitWidth: root.vertical ? fullWidth : Math.round(fullWidth * axisFactor)
+    implicitHeight: root.vertical ? Math.round(fullHeight * axisFactor) : fullHeight
     width: implicitWidth
     height: implicitHeight
+    clip: axisFactor < 1
     z: modulePointer.dragging ? 100 : 0
 
-    Component.onCompleted: root.registerModuleSlot(slot)
+    Component.onCompleted: {
+      root.slotSerial += 1
+      serial = root.slotSerial
+      root.registerModuleSlot(slot)
+      syncHub()
+      drawerExtent = drawerShown ? 1 : 0
+      drawerFade = drawerExtent
+      modeLevel = modeShown ? 1 : 0
+      if (root.powerUpPhase === "run") startPowerUp()
+    }
     Component.onDestruction: {
       if (root.barDragSource === slot) root.clearBarDrag()
       root.unregisterModuleSlot(slot)
+      releaseHub()
+    }
+
+    onHubKeyChanged: syncHub()
+    onHubChanged: syncHub()
+    onHoldsDrawerChanged: if (registeredHub) registeredHub.setHold(hubName(), "s" + serial, holdsDrawer)
+    onDrawerShownChanged: applyDrawer()
+    onModeShownChanged: applyMode()
+    onAttentionRawChanged: settleAttention()
+    onPanelOpenChanged: if (!panelOpen && summoned && !revealOpenTimer.running) summoned = false
+
+    function hubName() {
+      return isDrawerMark ? moduleName : drawerName
+    }
+
+    function releaseHub() {
+      var old = registeredHub
+      var key = registeredHubKey
+      registeredHub = null
+      registeredHubKey = ""
+      if (!old || !key) return
+      try {
+        var name = key.substring(key.indexOf(":") + 1)
+        old.setHold(name, "s" + serial, false)
+        if (key.indexOf("mark:") === 0) old.unregisterMark(name, slot)
+        else old.unregisterMember(name, slot)
+      } catch (e) {
+        // The hub went down with its bar surface first.
+      }
+    }
+
+    function syncHub() {
+      if (serial === 0) return
+      if (registeredHub === hub && registeredHubKey === hubKey) return
+      releaseHub()
+      if (!hub || !hubKey) return
+      registeredHub = hub
+      registeredHubKey = hubKey
+      if (isDrawerMark) hub.registerMark(moduleName, slot)
+      else hub.registerMember(drawerName, slot)
+      if (holdsDrawer) hub.setHold(hubName(), "s" + serial, true)
+    }
+
+    function settleAttention() {
+      if (attentionRaw <= attentionLevel) {
+        attentionTimer.stop()
+        attentionLevel = attentionRaw
+      } else if (!attentionTimer.running) {
+        attentionTimer.start()
+      }
+    }
+
+    function applyDrawer() {
+      var target = drawerShown ? 1 : 0
+      drawerAnim.stop()
+      if (!settled || root.reducedMotion) {
+        drawerExtent = target
+        drawerFade = target
+        return
+      }
+      if (drawerExtent === target && drawerFade === target) return
+      extentAnim.to = target
+      extentAnim.easing.type = target ? Easing.OutCubic : Easing.InOutCubic
+      fadePause.duration = target && hub && drawerName ? hub.staggerDelay(drawerName, slot) : 0
+      fadeAnim.to = target
+      fadeAnim.duration = target ? Motion.drawer : Motion.ack
+      drawerAnim.start()
+    }
+
+    function applyMode() {
+      var target = modeShown ? 1 : 0
+      modeAnim.stop()
+      if (!settled || root.reducedMotion) {
+        modeLevel = target
+        return
+      }
+      modeAnim.to = target
+      modeAnim.start()
+    }
+
+    // Power-up: each widget's moment is its place along the bar, so the bar
+    // fills left to right (top to bottom when vertical).
+    function startPowerUp() {
+      if (root.powerUpPhase !== "run" || root.reducedMotion) {
+        powerAnim.stop()
+        powerLevel = 1
+        return
+      }
+      var fraction = 0
+      try {
+        var point = slot.mapToItem(null, 0, 0)
+        var window = root.slotWindow(slot)
+        var span = window ? (root.vertical ? window.height : window.width) : 0
+        if (span > 0) fraction = Util.clamp((root.vertical ? point.y : point.x) / span, 0, 1)
+      } catch (e) {
+      }
+      powerLevel = 0
+      powerPause.duration = Math.round(fraction * root.powerUpSpan)
+      powerAnim.restart()
+    }
+
+    function revealThenOpen() {
+      summoned = true
+      revealOpenTimer.interval = root.reducedMotion ? 0 : Math.max(Motion.drawer, Motion.settle) + 40
+      revealOpenTimer.restart()
+    }
+
+    Connections {
+      target: root
+      function onPowerUpPhaseChanged() {
+        if (root.powerUpPhase === "run") slot.startPowerUp()
+        else if (root.powerUpPhase === "done" && !powerAnim.running) slot.powerLevel = 1
+      }
+    }
+
+    // Keyboard layout: the widget names the active keymap; whether that is
+    // the default layout comes from asking Hyprland each time the name moves.
+    Connections {
+      target: slot.moduleName === "omarchy.keyboard-layout" ? slot.activeItem : null
+      ignoreUnknownSignals: true
+      function onLayoutFullChanged() {
+        root.probeKeyboard(slot.activeItem ? slot.activeItem.typedKeyboardName : "")
+      }
+    }
+
+    Timer {
+      interval: 400
+      running: true
+      onTriggered: slot.settled = true
+    }
+
+    Timer {
+      id: attentionTimer
+      interval: 1500
+      onTriggered: slot.attentionLevel = slot.attentionRaw
+    }
+
+    Timer {
+      id: revealOpenTimer
+      onTriggered: {
+        if (slot.activeItem && typeof slot.activeItem.open === "function") slot.activeItem.open()
+        summonReleaseTimer.restart()
+      }
+    }
+
+    // If the panel never took (or has closed again), stop holding the member
+    // out of its drawer.
+    Timer {
+      id: summonReleaseTimer
+      interval: 800
+      onTriggered: if (!slot.panelOpen) slot.summoned = false
+    }
+
+    ParallelAnimation {
+      id: drawerAnim
+      NumberAnimation { id: extentAnim; target: slot; property: "drawerExtent"; duration: Motion.drawer }
+      SequentialAnimation {
+        PauseAnimation { id: fadePause; duration: 0 }
+        NumberAnimation { id: fadeAnim; target: slot; property: "drawerFade"; easing.type: Easing.OutCubic }
+      }
+    }
+
+    NumberAnimation {
+      id: modeAnim
+      target: slot
+      property: "modeLevel"
+      duration: Motion.settle
+      easing.type: Easing.InOutCubic
+    }
+
+    SequentialAnimation {
+      id: powerAnim
+      PauseAnimation { id: powerPause; duration: 0 }
+      NumberAnimation { target: slot; property: "powerLevel"; to: 1; duration: 260; easing.type: Easing.OutCubic }
     }
 
     HoverHandler { id: moduleHover }
@@ -1609,39 +2275,57 @@ Item {
       opacity: root.transparent ? 0.22 : 0.32
     }
 
-    Loader {
-      id: componentLoader
-      active: !slot.qmlCustom && !slot.registered
-      sourceComponent: slot.commandCustom ? customCommandModuleComponent : emptyModuleComponent
-      anchors.fill: parent
-      opacity: slot.dragSource ? 0.22 : 1.0
-      onLoaded: {
-        slot.injectProps()
-        Qt.callLater(slot.injectProps)
+    // The widget keeps its full size while the slot around it folds, so it
+    // never re-lays itself out mid-animation; the slot clips it instead. It
+    // stays loaded (and live) while folded, and takes no input.
+    Item {
+      id: slotBody
+      width: slot.fullWidth
+      height: slot.fullHeight
+      opacity: slot.drawerFade * slot.modeLevel * slot.powerLevel
+      enabled: slot.drawerShown && slot.modeShown
+      transform: Translate {
+        // A small rise into place during the power-up.
+        x: root.vertical ? (1 - slot.powerLevel) * Style.space(3) * (root.position === "left" ? -1 : 1) : 0
+        y: root.vertical ? 0 : (1 - slot.powerLevel) * Style.space(3) * (root.position === "bottom" ? 1 : -1)
       }
-    }
 
-    Loader {
-      id: registryLoader
-      active: slot.registered
-      sourceComponent: slot.registered ? slot.registryComponent : null
-      anchors.fill: parent
-      opacity: slot.dragSource ? 0.22 : 1.0
-      onLoaded: {
-        slot.injectProps()
-        Qt.callLater(slot.injectProps)
+      Loader {
+        id: componentLoader
+        active: !slot.qmlCustom && !slot.registered
+        sourceComponent: slot.commandCustom ? customCommandModuleComponent
+          : (slot.isDrawerMark ? drawerMarkComponent
+            : (slot.isScratchpad ? scratchpadComponent : emptyModuleComponent))
+        anchors.fill: parent
+        opacity: slot.dragSource ? 0.22 : 1.0
+        onLoaded: {
+          slot.injectProps()
+          Qt.callLater(slot.injectProps)
+        }
       }
-    }
 
-    Loader {
-      id: qmlLoader
-      active: slot.qmlCustom
-      source: slot.qmlCustom ? root.customModuleSource(slot.entry) : ""
-      anchors.fill: parent
-      opacity: slot.dragSource ? 0.22 : 1.0
-      onLoaded: {
-        slot.injectProps()
-        Qt.callLater(slot.injectProps)
+      Loader {
+        id: registryLoader
+        active: slot.registered
+        sourceComponent: slot.registered ? slot.registryComponent : null
+        anchors.fill: parent
+        opacity: slot.dragSource ? 0.22 : 1.0
+        onLoaded: {
+          slot.injectProps()
+          Qt.callLater(slot.injectProps)
+        }
+      }
+
+      Loader {
+        id: qmlLoader
+        active: slot.qmlCustom
+        source: slot.qmlCustom ? root.customModuleSource(slot.entry) : ""
+        anchors.fill: parent
+        opacity: slot.dragSource ? 0.22 : 1.0
+        onLoaded: {
+          slot.injectProps()
+          Qt.callLater(slot.injectProps)
+        }
       }
     }
 
@@ -1781,6 +2465,371 @@ Item {
     Component {
       id: customCommandModuleComponent
       CustomCommandModule { entry: slot.entry }
+    }
+
+    Component {
+      id: drawerMarkComponent
+      DrawerMark { host: slot }
+    }
+
+    Component {
+      id: scratchpadComponent
+      ScratchpadIndicator { }
+    }
+  }
+
+  // One per bar surface. Tracks each drawer's mark and members on that
+  // surface, what is holding it open (hover, an open panel, a pin), and the
+  // grace delay after the pointer leaves. Maps are mutated in place and
+  // announced through `rev`, which every reader touches.
+  component DrawerHub: Item {
+    id: hub
+
+    readonly property int grace: 500
+    property int rev: 0
+    property var marks: ({})
+    property var members: ({})
+    property var holds: ({})
+    property var pinned: ({})
+    property var lingerUntil: ({})
+
+    visible: false
+
+    function touch() {
+      rev = rev + 1
+    }
+
+    function hasMark(name) {
+      var revision = hub.rev
+      return !!marks[name]
+    }
+
+    function markSlot(name) {
+      var revision = hub.rev
+      return marks[name] || null
+    }
+
+    function memberSlots(name) {
+      var revision = hub.rev
+      return members[name] || []
+    }
+
+    function registerMark(name, slot) {
+      marks[name] = slot
+      touch()
+    }
+
+    function unregisterMark(name, slot) {
+      if (marks[name] !== slot) return
+      delete marks[name]
+      delete pinned[name]
+      touch()
+    }
+
+    function registerMember(name, slot) {
+      var next = (members[name] || []).filter(function(s) { return s !== slot })
+      next.push(slot)
+      members[name] = next
+      touch()
+    }
+
+    function unregisterMember(name, slot) {
+      if (!members[name]) return
+      members[name] = members[name].filter(function(s) { return s !== slot })
+      touch()
+    }
+
+    function setHold(name, key, on) {
+      if (!name || !key) return
+      var set = holds[name] || ({})
+      var had = Object.keys(set).length > 0
+      if (on) {
+        if (set[key] && lingerUntil[name] === undefined) return
+        set[key] = true
+        delete lingerUntil[name]
+      } else {
+        if (!set[key]) return
+        delete set[key]
+        if (had && Object.keys(set).length === 0) {
+          lingerUntil[name] = Date.now() + grace
+          lingerTimer.start()
+        }
+      }
+      holds[name] = set
+      touch()
+    }
+
+    function isPinned(name) {
+      var revision = hub.rev
+      return pinned[name] === true
+    }
+
+    // Open without a pointer: held for `ms`, then the usual fold. Only one
+    // drawer is out at a time, so two never stack up into the centre.
+    function openFor(name, ms) {
+      closeOthers(name)
+      lingerUntil[name] = Date.now() + Math.max(grace, ms)
+      lingerTimer.start()
+      touch()
+    }
+
+    // The mark's click: open and stay open (a member's own popup panel takes
+    // the pointer off the bar, so folding on leave would pull the member out
+    // from under it), or close.
+    function toggle(name) {
+      if (isOpen(name)) close(name)
+      else pin(name)
+    }
+
+    function closeOthers(name) {
+      for (var other in marks)
+        if (other !== name) close(other)
+    }
+
+    function close(name) {
+      delete pinned[name]
+      delete lingerUntil[name]
+      delete holds[name]
+      touch()
+    }
+
+    function pin(name) {
+      closeOthers(name)
+      pinned[name] = true
+      touch()
+    }
+
+    function isOpen(name) {
+      var revision = hub.rev
+      // A reorder drag opens every drawer so folded members can be drop targets.
+      if (root.barDragSource) return true
+      return pinned[name] === true
+        || Object.keys(holds[name] || {}).length > 0
+        || lingerUntil[name] !== undefined
+    }
+
+    // Unfolding fades members in one after another, nearest the mark first,
+    // with the whole run fitting into root.drawerRhythm.
+    function staggerDelay(name, slot) {
+      var mark = marks[name]
+      var list = (members[name] || []).filter(function(s) {
+        return s && s.activeItem && s.activeItem.visible === true
+      })
+      if (!mark || list.length < 2) return 0
+      function distance(s) {
+        return s.region === mark.region ? Math.abs(s.layoutIndex - mark.layoutIndex) : 1000 + s.layoutIndex
+      }
+      list.sort(function(a, b) { return distance(a) - distance(b) })
+      var rank = list.indexOf(slot)
+      if (rank <= 0) return 0
+      var step = Math.min(Motion.stagger, root.drawerRhythm / (list.length - 1))
+      return Math.round(rank * step)
+    }
+
+    Timer {
+      id: lingerTimer
+      interval: 40
+      repeat: true
+      onTriggered: {
+        var now = Date.now()
+        var changed = false
+        var left = 0
+        for (var name in hub.lingerUntil) {
+          if (hub.lingerUntil[name] <= now) {
+            delete hub.lingerUntil[name]
+            changed = true
+          } else {
+            left++
+          }
+        }
+        if (left === 0) stop()
+        if (changed) hub.touch()
+      }
+    }
+  }
+
+  // A drawer's one quiet mark: a dot (systems) or three small dots
+  // (launchers). Muted at rest; accent when a member needs a look or has news,
+  // urgent when one is broken or blocked; bar foreground while open or pinned.
+  // Click opens the drawer and it stays open; click again folds it.
+  component DrawerMark: Item {
+    id: mark
+
+    property var host: null
+    readonly property string name: host ? host.moduleName : ""
+    readonly property var spec: host ? host.drawerSpec : null
+    readonly property var hub: host ? host.hub : null
+    readonly property var memberList: hub ? hub.memberSlots(name) : []
+    readonly property int level: {
+      var best = 0
+      for (var i = 0; i < memberList.length; i++) {
+        var member = memberList[i]
+        if (member && member.attentionLevel > best) best = member.attentionLevel
+      }
+      return best
+    }
+    readonly property string troubleText: {
+      var lines = []
+      for (var i = 0; i < memberList.length; i++) {
+        var member = memberList[i]
+        if (member && member.attentionLevel > 0 && member.attentionReason) lines.push(member.attentionReason)
+      }
+      if (lines.length === 0) return ""
+      var label = spec && spec.label ? spec.label + ": " : ""
+      return label + lines.join(" · ")
+    }
+    readonly property bool open: hub ? hub.isOpen(name) : false
+    readonly property bool pinned: hub ? hub.isPinned(name) : false
+    readonly property bool tooltipHovered: markHover.hovered
+    readonly property color restInk: root.transparent ? root.barForeground : Color.muted
+    // Not readonly: it carries a colour Behavior.
+    property color ink: level >= 2 ? Color.urgent
+      : level === 1 ? Color.accent
+      : (open ? root.barForeground : restInk)
+    // On a transparent bar the text colour is picked against the wallpaper,
+    // so "muted" there is that colour, quietened.
+    readonly property real inkOpacity: level > 0 || open ? 1 : (root.transparent ? 0.5 : 1)
+    property real pulseScale: 1
+    property int lastLevel: 0
+
+    implicitWidth: root.vertical ? root.barSize : Style.space(16)
+    implicitHeight: root.vertical ? Style.space(16) : root.barSize
+
+    function triggerPress(button) {
+      if (hub) hub.toggle(name)
+    }
+
+    onLevelChanged: {
+      // One slow pulse when something new goes wrong; never a loop.
+      if (level > lastLevel && !root.reducedMotion && host && host.settled) pulse.restart()
+      lastLevel = level
+    }
+    onTroubleTextChanged: if (markHover.hovered) syncTooltip()
+
+    function syncTooltip() {
+      if (markHover.hovered && troubleText !== "") root.showTooltip(mark, troubleText)
+      else root.hideTooltip(mark)
+    }
+
+    HoverHandler {
+      id: markHover
+      onHoveredChanged: mark.syncTooltip()
+    }
+
+    Behavior on ink {
+      ColorAnimation { duration: Motion.duration(Motion.settle, root.motionMode); easing.type: Easing.InOutCubic }
+    }
+
+    SequentialAnimation {
+      id: pulse
+      NumberAnimation { target: mark; property: "pulseScale"; to: 1.7; duration: Motion.pulse * 0.35; easing.type: Easing.OutCubic }
+      NumberAnimation { target: mark; property: "pulseScale"; to: 1; duration: Motion.pulse * 0.65; easing.type: Easing.InOutCubic }
+    }
+
+    Grid {
+      anchors.centerIn: parent
+      columns: root.vertical ? 1 : 3
+      spacing: Style.space(2)
+      opacity: mark.inkOpacity
+      scale: mark.pulseScale
+
+      Repeater {
+        model: mark.spec && mark.spec.mark === "dots" ? 3 : 1
+
+        Rectangle {
+          readonly property int size: mark.spec && mark.spec.mark === "dots"
+            ? Style.space(3)
+            : (mark.level > 0 || mark.pinned ? Style.space(7) : Style.space(5))
+          width: size
+          height: size
+          radius: size / 2
+          color: mark.ink
+        }
+      }
+    }
+  }
+
+  // Trouble-only: an app parked on special:scratchpad that wants attention.
+  // Shows that app's icon, flattened to `urgent`, and nothing otherwise. It
+  // reports itself through the generic `juiceAttention` contract, so focus
+  // mode keeps it too. Click shows the scratchpad.
+  component ScratchpadIndicator: Item {
+    id: pad
+
+    readonly property var workspace: {
+      var list = Hyprland.workspaces ? Hyprland.workspaces.values : []
+      for (var i = 0; i < list.length; i++)
+        if (list[i] && list[i].name === "special:scratchpad") return list[i]
+      return null
+    }
+    readonly property var urgentWindow: {
+      if (!workspace || !workspace.toplevels) return null
+      var windows = workspace.toplevels.values || []
+      for (var i = 0; i < windows.length; i++)
+        if (windows[i] && windows[i].urgent === true) return windows[i]
+      return workspace.urgent === true && windows.length > 0 ? windows[0] : null
+    }
+    // The test hook can light it with `"tyler.scratchpad": 2`.
+    readonly property bool faked: root.fakeLevel("tyler.scratchpad") > 0
+    readonly property bool wanting: urgentWindow !== null || faked
+    readonly property string appClass: {
+      var ipc = urgentWindow ? urgentWindow.lastIpcObject : null
+      return ipc && ipc.class ? String(ipc.class) : ""
+    }
+    readonly property string appTitle: urgentWindow ? String(urgentWindow.title || appClass || "Scratchpad") : "Scratchpad (test)"
+    readonly property string iconSource: {
+      if (!appClass) return ""
+      var entry = DesktopEntries.heuristicLookup(appClass)
+      return Quickshell.iconPath(entry && entry.icon ? entry.icon : appClass.toLowerCase(), true)
+    }
+    readonly property int juiceAttention: wanting ? 2 : 0
+    readonly property string juiceAttentionReason: wanting ? appTitle + " wants you (scratchpad)" : ""
+    readonly property bool tooltipHovered: padHover.hovered
+
+    visible: wanting
+    implicitWidth: root.vertical ? root.barSize : Style.bar.iconSlot
+    implicitHeight: root.vertical ? Style.bar.iconSlot : root.barSize
+
+    function triggerPress(button) {
+      Quickshell.execDetached(["hyprctl", "dispatch", "hl.dsp.workspace.toggle_special(\"scratchpad\")"])
+    }
+
+    HoverHandler {
+      id: padHover
+      onHoveredChanged: {
+        if (hovered) root.showTooltip(pad, pad.juiceAttentionReason)
+        else root.hideTooltip(pad)
+      }
+    }
+
+    Image {
+      id: padIcon
+      anchors.centerIn: parent
+      width: Style.space(14)
+      height: width
+      sourceSize.width: width * 2
+      sourceSize.height: height * 2
+      source: pad.iconSource
+      visible: false
+      asynchronous: true
+    }
+
+    MultiEffect {
+      anchors.fill: padIcon
+      source: padIcon
+      visible: padIcon.status === Image.Ready
+      colorization: 1.0
+      colorizationColor: Color.urgent
+    }
+
+    // No icon to be found: a plain urgent tile in its place.
+    Rectangle {
+      anchors.centerIn: parent
+      visible: padIcon.status !== Image.Ready
+      width: Style.space(10)
+      height: width
+      radius: Style.space(2)
+      color: Color.urgent
     }
   }
 

@@ -149,7 +149,10 @@ Item {
   }
   property bool deleteConfirmOpen: false
   property var deleteTarget: null
-  onOpenedChanged: if (!opened) { deleteConfirmOpen = false; deleteTarget = null }
+  onOpenedChanged: {
+    if (opened) Quickshell.execDetached([(Quickshell.env("HOME") || "") + "/.local/bin/juice-sound", "launcher"])
+    else { deleteConfirmOpen = false; deleteTarget = null }
+  }
   // Bound to the central [menu] section in shell.toml via Color.qml.
   // Each color already includes its alpha companion (composed in the
   // singleton), so consumers can drop them straight into a Rectangle.

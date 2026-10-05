@@ -1,0 +1,20 @@
+#!/bin/bash
+# Copies the palette rendered from ~/.config/omarchy/themed/openclaw-theme.json.tpl
+# into the local OpenClaw "omarchy" theme plugin, then reloads that plugin so
+# open Control UI pages repaint without a Gateway restart.
+set -euo pipefail
+
+source_file=$HOME/.local/state/omarchy/current/theme/openclaw-theme.json
+themes_dir=$HOME/.local/share/openclaw-omarchy-theme/themes
+
+# A theme without a generated palette leaves the last accepted colors alone.
+[[ -f $source_file ]] || exit 0
+temporary=$(mktemp "$themes_dir/.omarchy.XXXXXX")
+trap 'rm -f -- "$temporary"' EXIT
+cp -- "$source_file" "$temporary"
+chmod 644 "$temporary"
+mv -f -- "$temporary" "$themes_dir/omarchy.json"
+
+# The reload takes several seconds, so it runs detached instead of delaying the
+# theme switch. A stopped Gateway reads the file at its next start.
+setsid -f openclaw plugins reload omarchy >/dev/null 2>&1 || true

@@ -68,5 +68,6 @@ cp -- "$source_home/.config/brave-origin-flags.conf" "$dest/.config/brave-origin
 mkdir -p "$dest/.local/bin"
 cp -- "$source_home/.local/bin/voxtype-backup" "$dest/.local/bin/voxtype-backup"
 cp -- "$source_home/.local/bin/webcam-recording" "$dest/.local/bin/webcam-recording"
+cp -- "$source_home/.local/bin/zet-workspace-flow" "$dest/.local/bin/zet-workspace-flow"
 
 "$repo_root/scripts/check-public"

@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Desktop juice: keep Herdr's accent in step with the Omarchy theme.
+# Sets [ui] accent in Herdr's config.toml to the palette name whose colour
+# equals the theme's accent (so Herdr's terminal theme keeps following the
+# terminal palette), otherwise to the accent's hex, then reloads every running
+# Herdr session. Idempotent: an unchanged accent writes and reloads nothing.
+# Runs from omarchy-hook theme-set (theme slug in $1, unused).
+set -euo pipefail
+
+command -v herdr >/dev/null || exit 0
+
+colors=$HOME/.local/state/omarchy/current/theme/colors.toml
+config=${HERDR_CONFIG_PATH:-$HOME/.config/herdr/config.toml}
+[[ -f $colors && -f $config ]] || exit 0
+config=$(readlink -f "$config")
+
+# Value of `key = "..."` in colors.toml, lowercased; empty when absent.
+theme_value() {
+  sed -nE "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*\"(#[0-9A-Fa-f]{6})\".*/\1/p" "$colors" \
+    | head -n1 | tr 'A-F' 'a-f'
+}
+
+accent=$(theme_value accent)
+[[ -n $accent ]] || exit 0
+
+# Omarchy's terminal templates map ANSI 1-6 to these theme keys (older themes
+# only carry color1-color6). Bright slots differ per theme, so they are not
+# used: a hex is exact and needs no palette.
+value=$accent
+slot=1
+for name in red green yellow blue magenta cyan; do
+  hex=$(theme_value "$name")
+  [[ -n $hex ]] || hex=$(theme_value "color$slot")
+  if [[ $hex == "$accent" ]]; then
+    value=$name
+    break
+  fi
+  slot=$((slot + 1))
+done
+
+# Replace `accent = ...` inside [ui], or add it at the end of the [ui] table.
+updated=$(awk -v line="accent = \"$value\"" '
+  /^[[:space:]]*\[/ {
+    if (in_ui && !done) { print line; done = 1 }
+    in_ui = ($0 ~ /^[[:space:]]*\[ui\][[:space:]]*(#.*)?$/)
+    print
+    next
+  }
+  in_ui && !done && /^[[:space:]]*accent[[:space:]]*=/ { print line; done = 1; next }
+  { print }
+  END { if (!done) { if (!in_ui) print "\n[ui]"; print line } }
+' "$config")
+[[ $updated != "$(cat "$config")" ]] || exit 0
+
+tmp=$(mktemp "$config.XXXXXX")
+printf '%s\n' "$updated" > "$tmp"
+chmod --reference="$config" "$tmp"
+mv -f "$tmp" "$config"
+
+# Named sessions share this config, so reload each one that is running.
+herdr session list --json 2>/dev/null \
+  | jq -r '.sessions[]? | select(.running) | .socket_path' \
+  | while IFS= read -r socket; do
+      HERDR_SOCKET_PATH=$socket timeout 3 herdr server reload-config >/dev/null 2>&1 || true
+    done

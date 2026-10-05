@@ -1,0 +1,380 @@
+#!/usr/bin/env python3
+"""Numbered workspaces that span both monitors, for Hyprland.
+
+Workspace number N is Hyprland workspace N on the left monitor and N + 10 on
+the right one ("2A" and "2B"), so each monitor keeps its own windows and the
+pair switches together. Monitors are told apart by position, leftmost first;
+~/.config/hypr/workspaces.lua only gives each monitor its starting workspace.
+Every numbered-workspace key goes through this script.
+"""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import time
+import uuid
+from pathlib import Path
+
+COUNT = 10  # workspace numbers; the right monitor's Hyprland ids are offset by this
+STATE_DIR = Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / "zet-workspace-flow"
+ANIMATION_TOKEN = STATE_DIR / "animation-token"
+PREVIOUS = STATE_DIR / "previous"
+
+BASE_ANIMATION = (
+    'hl.animation({ leaf = "workspaces", enabled = true, speed = 4, '
+    'bezier = "easeOutQuint", style = "slide" })'
+)
+MOVE_ANIMATION = (
+    'hl.animation({ leaf = "workspaces", enabled = true, speed = 2.4, '
+    'bezier = "easeInOutCubic", style = "slidefade" })'
+)
+
+USAGE = """usage: zet-workspace-flow COMMAND
+  left|right|cycle [move]   step or cycle the pair; move takes the focused window
+  scroll up|down            step the pair one workspace
+  goto N                    show workspace N on both monitors
+  previous                  go back to the workspace shown before
+  send N [silent]           move the focused window to N on its monitor
+  windows next|prev         focus the next window on either monitor
+  shift left|right          swap with the neighbour, crossing monitors at the edge
+  sync                      after a monitor comes or goes"""
+
+
+# ---------------------------------------------------------------- Hyprland
+
+def hypr_json(command: str):
+    return json.loads(subprocess.check_output(["hyprctl", command, "-j"], text=True))
+
+
+def eval_hypr(*exprs: str) -> None:
+    """Run Lua in Hyprland. A failed dispatch is only a warning there, so say it."""
+    out = subprocess.run(
+        ["hyprctl", "eval", "; ".join(exprs)], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    if out != "ok":
+        print(out, file=sys.stderr)
+
+
+def spawn(argv: list[str]) -> None:
+    subprocess.Popen(
+        argv,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+def dispatch(action: str) -> str:
+    return f"hl.dispatch(hl.dsp.{action})"
+
+
+def focus_window(address: str) -> str:
+    return dispatch(f'focus({{ window = "address:{address}" }})')
+
+
+def move_window(workspace: int, address: str | None = None) -> str:
+    target = f'window = "address:{address}", ' if address else ""
+    return dispatch(f'window.move({{ {target}workspace = "{workspace}", follow = false }})')
+
+
+def swap_window(direction: str) -> str:
+    return dispatch(f'window.swap({{ direction = "{direction[0]}" }})')
+
+
+# ---------------------------------------------------------------- the model
+
+def number(workspace_id: int) -> int:
+    """Workspace number (1-10) of a Hyprland workspace id, or 0 if it has none."""
+    return (workspace_id - 1) % COUNT + 1 if 1 <= workspace_id <= 2 * COUNT else 0
+
+
+def side(workspace_id: int) -> int:
+    """0 for the left monitor's half of a workspace, 1 for the right one's."""
+    return 0 if workspace_id <= COUNT else 1
+
+
+def hypr_id(workspace_number: int, workspace_side: int) -> int:
+    return workspace_number + COUNT * workspace_side
+
+
+def clamp(workspace_number: int) -> int:
+    return max(1, min(COUNT, workspace_number))
+
+
+def view_monitors() -> list[dict]:
+    """The monitors that show a half each, leftmost first."""
+    monitors = [m for m in hypr_json("monitors") if not m.get("disabled")]
+    return sorted(monitors, key=lambda m: (m["x"], m["y"]))[:2]
+
+
+def current_view(monitors: list[dict]) -> int:
+    return number(int(monitors[0]["activeWorkspace"]["id"])) or 1
+
+
+def set_view(workspace_number: int, monitors: list[dict]) -> str:
+    """Show each monitor its half of the workspace and keep the keyboard where it is.
+
+    on_current_monitor pulls a half onto its monitor wherever Hyprland left it
+    (a monitor that went away and came back, a different port), so position
+    alone decides which monitor shows which half.
+    """
+    focused = next((m["name"] for m in monitors if m.get("focused")), monitors[0]["name"])
+    steps = []
+    for index, monitor in enumerate(monitors):
+        steps.append(dispatch(f'focus({{ monitor = "{monitor["name"]}" }})'))
+        steps.append(dispatch(
+            f'focus({{ workspace = "{hypr_id(workspace_number, index)}", on_current_monitor = true }})'
+        ))
+    steps.append(dispatch(f'focus({{ monitor = "{focused}" }})'))
+    return "; ".join(steps)
+
+
+def show_switcher(workspace_number: int) -> None:
+    payload = json.dumps({"workspace": workspace_number})
+    spawn(["omarchy-shell", "-q", "io.zet.workspace-switcher", "show", payload])
+
+
+def change_view(view: int, target: int, monitors: list[dict], before: str = "", after: str = "") -> None:
+    """Show `target` on every monitor, remembering `view` for `previous`."""
+    if target != view:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        PREVIOUS.write_text(f"{view}\n", encoding="utf-8")
+    eval_hypr(*filter(None, (before, set_view(target, monitors), after)))
+    show_switcher(target)
+
+
+def previous_view() -> int:
+    try:
+        return number(int(PREVIOUS.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return 0
+
+
+def occupied_numbers() -> list[int]:
+    return sorted({
+        number(int(w["id"]))
+        for w in hypr_json("workspaces")
+        if number(int(w["id"])) and int(w.get("windows", 0)) > 0
+    })
+
+
+# ---------------------------------------------------------------- animation
+
+def restore_animation_after(token: str) -> int:
+    time.sleep(0.7)
+    try:
+        if ANIMATION_TOKEN.read_text(encoding="utf-8").strip() != token:
+            return 0
+    except OSError:
+        return 0
+    eval_hypr(BASE_ANIMATION)
+    ANIMATION_TOKEN.unlink(missing_ok=True)
+    return 0
+
+
+def schedule_animation_restore() -> None:
+    """Put the normal workspace animation back once the slower carry has played.
+
+    The token lets the newest carry win when several overlap.
+    """
+    token = uuid.uuid4().hex
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    ANIMATION_TOKEN.write_text(token + "\n", encoding="utf-8")
+    spawn([sys.executable, str(Path(__file__).resolve()), "--restore-animation", token])
+
+
+# ---------------------------------------------------------------- windows
+
+def focused_window() -> dict | None:
+    """The focused window, if it sits on a numbered workspace."""
+    active = hypr_json("activewindow")
+    if not active or not active.get("address") or not number(int(active["workspace"]["id"])):
+        return None
+    return active
+
+
+def cycle_windows(step: int, monitors: list[dict]) -> None:
+    """Alt+Tab: windows on both monitors' visible workspaces, left to right."""
+    visible = {int(m["activeWorkspace"]["id"]) for m in monitors}
+    order = {m["id"]: i for i, m in enumerate(monitors)}
+    clients = sorted(
+        (
+            c for c in hypr_json("clients")
+            if c.get("mapped") and not c.get("hidden") and int(c["workspace"]["id"]) in visible
+        ),
+        key=lambda c: (order.get(c["monitor"], len(order)), c["at"][0], c["at"][1]),
+    )
+    if not clients:
+        return
+    addresses = [c["address"] for c in clients]
+    active = hypr_json("activewindow")
+    here = addresses.index(active["address"]) if active and active.get("address") in addresses else -1
+    target = addresses[(here + step) % len(addresses)]
+    eval_hypr(focus_window(target), dispatch("window.bring_to_top()"))
+
+
+def play(sound: str) -> None:
+    """Hyprland's events can't tell a swap or a monitor crossing apart, so
+    `shift` plays its own sound."""
+    spawn(["juice-sound", sound])
+
+
+def has_neighbour(window: dict, others: list[dict], direction: str) -> bool:
+    """Whether any of `others` lies wholly past `window` on the `direction` side."""
+    left = window["at"][0]
+    right = left + window["size"][0]
+    if direction == "right":
+        return any(c["at"][0] >= right - 2 for c in others)
+    return any(c["at"][0] + c["size"][0] <= left + 2 for c in others)
+
+
+def tiled_peers(workspace_id: int, address: str) -> list[dict]:
+    return [
+        c for c in hypr_json("clients")
+        if c.get("mapped") and not c.get("floating")
+        and int(c["workspace"]["id"]) == workspace_id and c["address"] != address
+    ]
+
+
+def shift_window(direction: str, monitors: list[dict]) -> None:
+    """Super+Alt+Left/Right: swap with the neighbour; at the edge, cross monitors.
+
+    Crossing right lands the window at the left edge of the other half,
+    crossing left at its right edge.
+    """
+    active = hypr_json("activewindow")
+    if not active or not active.get("address"):
+        return
+    workspace_id = int(active["workspace"]["id"])
+    address = active["address"]
+    if active.get("floating") or not number(workspace_id) or has_neighbour(
+        active, tiled_peers(workspace_id, address), direction
+    ):
+        eval_hypr(swap_window(direction))
+        play("float")
+        return
+
+    here = next((i for i, m in enumerate(monitors) if m["id"] == active["monitor"]), None)
+    there = None if here is None else here + (1 if direction == "right" else -1)
+    if there is None or not 0 <= there < len(monitors):
+        return
+    destination = hypr_id(number(workspace_id), there)
+    play(f"ws-carry-{direction}")
+    eval_hypr(move_window(destination), focus_window(address))
+
+    # The layout drops it wherever it likes; walk it to the edge it came in by.
+    back = "left" if direction == "right" else "right"
+    for _ in range(8):  # more swaps than a half has columns
+        moved = hypr_json("activewindow")
+        if moved.get("address") != address or not has_neighbour(moved, tiled_peers(destination, address), back):
+            break
+        eval_hypr(swap_window(back))
+
+
+def send_window(target: int, silent: bool, view: int, monitors: list[dict]) -> None:
+    """Super+Shift+N: the window changes number but stays on its monitor."""
+    active = focused_window()
+    if not active:
+        return
+    move = move_window(hypr_id(target, side(int(active["workspace"]["id"]))))
+    if silent:
+        eval_hypr(move)
+    else:
+        change_view(view, target, monitors, before=move, after=focus_window(active["address"]))
+
+
+def carry_window(target: int, view: int, monitors: list[dict]) -> None:
+    """Super+Shift+Left/Right/Tab: take the window along to `target`, same monitor."""
+    active = focused_window()
+    if not active:
+        return
+    move = move_window(hypr_id(target, side(int(active["workspace"]["id"]))))
+    change_view(view, target, monitors, before=MOVE_ANIMATION + "; " + move, after=focus_window(active["address"]))
+    schedule_animation_restore()
+
+
+def sync(monitors: list[dict]) -> None:
+    """After a monitor comes or goes. With one monitor left, the right halves
+    fold into their numbers on it (2B into 2A); then every monitor shows its
+    half of the current workspace."""
+    moves = []
+    if len(monitors) < 2:
+        moves = [
+            move_window(number(int(c["workspace"]["id"])), c["address"])
+            for c in hypr_json("clients")
+            if number(int(c["workspace"]["id"])) and side(int(c["workspace"]["id"])) == 1
+        ]
+    eval_hypr(*moves, set_view(current_view(monitors), monitors))
+
+
+# ---------------------------------------------------------------- main
+
+def next_occupied(view: int) -> int:
+    others = [n for n in occupied_numbers() if n != view]
+    if not others:
+        return view % COUNT + 1  # nothing else is occupied: the next number, wrapping 10 -> 1
+    return next((n for n in others if n > view), others[0])
+
+
+def valid(command: str, rest: list[str]) -> bool:
+    if command in ("left", "right", "cycle"):
+        return rest in ([], ["move"])
+    if command == "scroll":
+        return rest in (["up"], ["down"])
+    if command == "goto":
+        return len(rest) == 1 and rest[0].isdigit()
+    if command == "send":
+        return len(rest) in (1, 2) and rest[0].isdigit() and rest[1:] in ([], ["silent"])
+    if command == "windows":
+        return rest in (["next"], ["prev"])
+    if command == "shift":
+        return rest in (["left"], ["right"])
+    return command in ("previous", "sync") and not rest
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) == 2 and argv[0] == "--restore-animation":
+        return restore_animation_after(argv[1])
+    command, rest = (argv[0], argv[1:]) if argv else ("", [])
+    if not valid(command, rest):
+        print(USAGE, file=sys.stderr)
+        return 2
+
+    monitors = view_monitors()
+    if not monitors:
+        return 0
+    view = current_view(monitors)
+
+    if command == "sync":
+        sync(monitors)
+    elif command == "windows":
+        cycle_windows(1 if rest == ["next"] else -1, monitors)
+    elif command == "shift":
+        shift_window(rest[0], monitors)
+    elif command == "send":
+        send_window(clamp(int(rest[0])), rest[1:] == ["silent"], view, monitors)
+    else:
+        if command in ("left", "right"):
+            target = clamp(view + (1 if command == "right" else -1))
+        elif command == "scroll":
+            target = clamp(view + (1 if rest == ["down"] else -1))
+        elif command == "goto":
+            target = clamp(int(rest[0]))
+        elif command == "previous":
+            target = previous_view()
+        else:
+            target = next_occupied(view)
+        if not target or target == view:
+            return 0
+        if rest == ["move"]:
+            carry_window(target, view, monitors)
+        else:
+            change_view(view, target, monitors)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

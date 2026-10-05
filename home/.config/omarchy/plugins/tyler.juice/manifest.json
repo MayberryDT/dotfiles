@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "tyler.juice",
+  "name": "Juice",
+  "version": "0.1.0",
+  "author": "Tyler Mayberry",
+  "description": "Focus mode, agent herd status from Herdr, and the shared state bus the other juice plugins read.",
+  "kinds": ["service", "bar-widget"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Focus and agents",
+    "description": "Herdr agent marks and the focus mode button",
+    "category": "System",
+    "defaultSection": "right",
+    "allowMultiple": false
+  }
+}

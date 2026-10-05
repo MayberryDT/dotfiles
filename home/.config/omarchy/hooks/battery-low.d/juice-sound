@@ -1,0 +1,6 @@
+#!/bin/bash
+# Battery is low ($1 = percentage). Omarchy's battery service runs this hook
+# once per drop below its threshold; play the sound once, without holding the
+# hook runner while it plays.
+setsid -f juice-sound battery-low >/dev/null 2>&1 </dev/null
+exit 0

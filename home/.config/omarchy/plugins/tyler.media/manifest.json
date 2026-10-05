@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "tyler.media",
+  "name": "Music",
+  "version": "1.0.0",
+  "author": "Tyler Mayberry",
+  "description": "cliamp now-playing, controls and stations. Talks to cliamp's v2 IPC directly; ignores browsers.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Music",
+    "description": "cliamp now playing with a visualiser, progress line, hover controls and a stations panel",
+    "category": "Media",
+    "defaultSection": "center",
+    "allowMultiple": false,
+    "defaults": {
+      "maxTitleWidth": 180,
+      "visualizer": true,
+      "showWhenAbsent": true,
+      "tintArt": false
+    }
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.media"
+  }
+}

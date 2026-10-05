@@ -68,3 +68,49 @@ hl.config({
     no_hardware_cursors = 1,
   },
 })
+
+-- atmos:look begin
+hl.config({
+  general = {
+    gaps_in = 5,
+    gaps_out = 10,
+    border_size = 2,
+    layout = "dwindle",
+    allow_tearing = false,
+    resize_on_border = false,
+  },
+  decoration = {
+    rounding = 0,
+    shadow = {
+      enabled = false,
+    },
+    blur = {
+      enabled = false,
+    },
+    dim_inactive = false,
+    dim_strength = 0.15,
+    active_opacity = 1,
+    inactive_opacity = 1,
+  },
+  animations = {
+    enabled = true,
+  },
+  scrolling = {
+    column_width = 0.49,
+  },
+  dwindle = {
+    preserve_split = false,
+  },
+  misc = {
+    focus_on_activate = false,
+    enable_swallow = false,
+    on_focus_under_fullscreen = 1,
+  },
+  cursor = {
+    hide_on_key_press = true,
+    warp_on_change_workspace = 1,
+  },
+})
+hl.env("HYPRCURSOR_SIZE", "24")
+hl.env("XCURSOR_SIZE", "24")
+-- atmos:look end

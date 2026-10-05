@@ -185,6 +185,7 @@ function snapshotOf(notification, timestamp) {
   var id = n.id || 0
   var expireTimeout = Number(n.expireTimeout || 0)
   if (!isFinite(expireTimeout) || expireTimeout < 0) expireTimeout = 0
+  var herdr = herdrHints(n.appName, n.hints)
   return {
     id: id,
     originalId: id,
@@ -192,9 +193,15 @@ function snapshotOf(notification, timestamp) {
     appIcon: n.appIcon || "",
     summary: String(n.summary || ""),
     body: n.body || "",
+    // JSON keeps QObject action references out of the ListModel and persistence.
+    actionsJson: JSON.stringify(Array.from(n.actions || [], function(action) {
+      return { identifier: String(action.identifier), text: String(action.text) }
+    })),
     image: n.image || "",
     glyph: glyphFromHints(n.hints),
     execArgv: execArgvFromHints(n.hints),
+    herdrPane: herdr.pane,
+    herdrSpace: herdr.space,
     urgency: n.urgency,
     expireTimeout: expireTimeout,
     timestamp: timestamp === undefined ? Date.now() : timestamp
@@ -203,7 +210,17 @@ function snapshotOf(notification, timestamp) {
 
 // Everything the popup card draws, and therefore everything an in-place
 // update has to write through to the row and its file.
-var POPUP_ROLES = ["app", "appIcon", "summary", "body", "image", "glyph", "execArgv", "urgency", "expireTimeout"]
+var POPUP_ROLES = ["app", "appIcon", "summary", "body", "actionsJson", "image", "glyph", "execArgv", "herdrPane", "herdrSpace", "urgency", "expireTimeout"]
+
+function actionButtons(json) {
+  try {
+    return JSON.parse(json || "[]").filter(function(action) {
+      return action.identifier !== "default" && action.text
+    }).map(function(action) {
+      return { identifier: action.identifier, text: action.text.replace(/(^|\s)([a-z])/g, function(_, space, letter) { return space + letter.toUpperCase() }) }
+    })
+  } catch (e) { return [] }
+}
 
 function popupRoles() {
   return POPUP_ROLES
@@ -246,29 +263,35 @@ function historyEntry(value, normalUrgency) {
     image: e.image || "",
     glyph: e.glyph || "",
     execArgv: e.execArgv || "",
+    herdrPane: isHerdrApp(e.app) ? herdrPaneId(e.herdrPane) : "",
+    herdrSpace: isHerdrApp(e.app) ? herdrSpaceLabel(e.herdrSpace) : "",
     urgency: typeof e.urgency === "number" ? e.urgency : normalUrgency,
     expireTimeout: 0,
     timestamp: e.timestamp || 0
   }
 }
 
-// notifications.json holds nothing but the last-set DND preference now that
-// history is a directory of files. Older versions kept `pending`/`past`
-// (and, older still, `entries`) arrays in there; their presence is reported
-// so the service can rewrite the file without the dead payload.
+// notifications.json holds the last-set DND preference and the moment the
+// inbox was last looked at (seenAt, which decides what still lights the chip)
+// now that history is a directory of files. Older versions kept
+// `pending`/`past` (and, older still, `entries`) arrays in there; their
+// presence is reported so the service can rewrite the file without the dead
+// payload.
 function parseSettings(raw) {
   var text = String(raw || "").trim()
-  if (!text) return { error: false, dnd: null, legacy: false }
+  if (!text) return { error: false, dnd: null, seenAt: null, legacy: false }
 
   try {
     var parsed = JSON.parse(text)
+    var seenAt = parsed ? Number(parsed.seenAt) : NaN
     return {
       error: false,
       dnd: parsed && typeof parsed.dnd === "boolean" ? parsed.dnd : null,
+      seenAt: isFinite(seenAt) && seenAt > 0 ? seenAt : null,
       legacy: !!(parsed && (parsed.pending || parsed.past || parsed.entries))
     }
   } catch (e) {
-    return { error: true, errorMessage: String(e), dnd: null, legacy: false }
+    return { error: true, errorMessage: String(e), dnd: null, seenAt: null, legacy: false }
   }
 }
 
@@ -446,6 +469,172 @@ function historyRows(raw, liveRows, normalUrgency, limit) {
   return out.slice(0, max)
 }
 
+// ---------------------------------------------------- Herdr notifications
+//
+// tyler.juice sends agent events as `notify-send -a Herdr` with the pane and
+// space in hints. Any session-bus client can set those hints, and the pane id
+// becomes an argv element of `omarchy-shell tyler.juice herdFocus`, so it is
+// held to the shape Herdr uses (w9:p1) and can never start with a dash.
+
+var HERDR_APP = "Herdr"
+
+function isHerdrApp(appName) {
+  return String(appName || "") === HERDR_APP
+}
+
+function herdrPaneId(value) {
+  var text = String(value || "").trim()
+  return /^[A-Za-z0-9][A-Za-z0-9:._-]{0,63}$/.test(text) ? text : ""
+}
+
+function herdrSpaceLabel(value) {
+  var text = String(value || "").replace(/[\u0000-\u001f\u007f]+/g, " ").trim()
+  return text.length > 64 ? text.slice(0, 64) : text
+}
+
+function herdrHints(appName, hints) {
+  if (!isHerdrApp(appName)) return { pane: "", space: "" }
+  return {
+    pane: herdrPaneId(stringHint(hints, "x-herdr-pane")),
+    space: herdrSpaceLabel(stringHint(hints, "x-herdr-space"))
+  }
+}
+
+// Inbox rows arrive newest-first. Herdr rows gather under one header per
+// space, and each group sits where its newest row would have been, so a busy
+// space doesn't bury everything else and a quiet one doesn't jump the queue.
+function groupInboxRows(rows) {
+  var ordered = []
+  var groups = {}
+  var list = Array.isArray(rows) ? rows : []
+  for (var i = 0; i < list.length; i++) {
+    var row = list[i]
+    if (!row) continue
+    if (!isHerdrApp(row.app)) {
+      ordered.push(row)
+      continue
+    }
+    var key = "herdr:" + String(row.herdrSpace || "")
+    var group = groups[key]
+    if (!group) {
+      group = { groupKey: key, label: String(row.herdrSpace || ""), items: [] }
+      groups[key] = group
+      ordered.push(group)
+    }
+    group.items.push(row)
+  }
+
+  var flat = []
+  for (var j = 0; j < ordered.length; j++) {
+    var entry = ordered[j]
+    if (!entry.items) {
+      flat.push(entry)
+      continue
+    }
+    flat.push({ isHeader: true, groupKey: entry.groupKey, label: entry.label, count: entry.items.length })
+    for (var k = 0; k < entry.items.length; k++) flat.push(entry.items[k])
+  }
+  return flat
+}
+
+// ---------------------------------------------------- automatic DND inputs
+
+// tyler.juice's state bus. Only the two fields this plugin acts on are read;
+// null means the text was not a usable document, so the caller keeps its last
+// good values.
+function parseJuiceState(raw) {
+  var text = String(raw || "")
+  if (!text.trim() || text.length > 1048576) return null
+  try {
+    var parsed = JSON.parse(text)
+    if (!parsed || typeof parsed !== "object") return null
+    var focus = parsed.focus && typeof parsed.focus === "object" ? parsed.focus : {}
+    return {
+      focusOn: focus.on === true,
+      reducedMotion: parsed.motion === "reduced"
+    }
+  } catch (e) {
+    return null
+  }
+}
+
+// `hyprctl activewindow -j`. Hyprland reports its internal fullscreen mode as
+// bit flags (1 maximized, 2 fullscreen), so a maximized window is not a
+// fullscreen one. No focused window prints "Invalid" or {}, which is false.
+function activeWindowFullscreen(raw) {
+  var text = String(raw || "").trim()
+  if (!text || text.charAt(0) !== "{" || text.length > 262144) return false
+  try {
+    var parsed = JSON.parse(text)
+    if (!parsed || typeof parsed !== "object") return false
+    var mode = parsed.fullscreen
+    if (typeof mode === "boolean") return mode
+    mode = Number(mode)
+    return isFinite(mode) && (mode & 2) !== 0
+  } catch (e) {
+    return false
+  }
+}
+
+// tmn73.calendar's cache (~/.local/state/omarchy/calendar-events.json). Null
+// means unreadable, so the caller keeps the events it already had.
+function parseCalendarEvents(raw) {
+  var text = String(raw || "")
+  if (!text.trim() || text.length > 4194304) return null
+  try {
+    var parsed = JSON.parse(text)
+    return parsed && Array.isArray(parsed.events) ? parsed.events : null
+  } catch (e) {
+    return null
+  }
+}
+
+// Google event types that sit on the calendar without anyone to meet:
+// reservations Gmail copied in, working location, out of office, focus time.
+var NON_MEETING_EVENT_TYPES = {
+  fromGmail: true,
+  workingLocation: true,
+  outOfOffice: true,
+  focusTime: true,
+  birthday: true
+}
+
+// The cache has no attendee list. responseStatus is Tyler's own answer, and
+// the sync only fills it when he is on the event's attendee list, so a
+// non-empty answer stands in for "has attendees". A declined event is not
+// one he is in, link or not.
+function isMeetingEvent(event) {
+  if (!event || typeof event !== "object" || event.allDay === true) return false
+  if (NON_MEETING_EVENT_TYPES[String(event.eventType || "")]) return false
+  var response = String(event.responseStatus || "")
+  if (response === "declined") return false
+  return String(event.meetingUrl || "") !== "" || response !== ""
+}
+
+// Whether a meeting is happening at `now`, when the one running ends, and the
+// next moment the answer can change (0 when nothing ahead can change it), so
+// the caller can wake exactly then instead of polling.
+function meetingState(events, now) {
+  var list = Array.isArray(events) ? events : []
+  var t = Number(now)
+  var endsAt = 0
+  var nextChangeAt = 0
+  function consider(at) {
+    if (at > t && (nextChangeAt === 0 || at < nextChangeAt)) nextChangeAt = at
+  }
+  for (var i = 0; i < list.length; i++) {
+    var event = list[i]
+    if (!isMeetingEvent(event)) continue
+    var start = Date.parse(String(event.start || ""))
+    var end = Date.parse(String(event.end || ""))
+    if (!isFinite(start) || !isFinite(end) || end <= start) continue
+    consider(start)
+    consider(end)
+    if (start <= t && t < end && end > endsAt) endsAt = end
+  }
+  return { active: endsAt > 0, endsAt: endsAt, nextChangeAt: nextChangeAt }
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     isChromiumDerived: isChromiumDerived,
@@ -474,6 +663,16 @@ if (typeof module !== "undefined") {
     serializePopup: serializePopup,
     parsePopupFiles: parsePopupFiles,
     popupExpired: popupExpired,
-    popupPlacement: popupPlacement
+    popupPlacement: popupPlacement,
+    isHerdrApp: isHerdrApp,
+    herdrPaneId: herdrPaneId,
+    herdrSpaceLabel: herdrSpaceLabel,
+    herdrHints: herdrHints,
+    groupInboxRows: groupInboxRows,
+    parseJuiceState: parseJuiceState,
+    activeWindowFullscreen: activeWindowFullscreen,
+    parseCalendarEvents: parseCalendarEvents,
+    isMeetingEvent: isMeetingEvent,
+    meetingState: meetingState
   }
 }

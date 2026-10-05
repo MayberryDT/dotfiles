@@ -183,3 +183,90 @@ declaring `kinds: ["bar-widget"]` and a `barWidget` entry point. See
 [../../README.md](../../README.md) for the manifest schema. Rescan, enable,
 and place third-party plugins with `omarchy-shell shell rescanPlugins`,
 `omarchy plugin enable`, and `omarchy bar move`.
+
+## Juice (tyler.bar)
+
+This clone adds drawers, attention, modes and a power-up. It imports motion
+timings from `../tyler.juice/Motion.js`, so the `tyler.juice` plugin must be
+installed alongside it.
+
+### Drawers
+
+`bar.drawers` groups widgets behind one quiet mark. Every member stays an
+ordinary `bar.layout.*` entry (the host enables, configures and moves widgets
+by those entries); the drawer only names them:
+
+```json
+"drawers": {
+  "tyler.systems": { "label": "Systems", "mark": "dot", "members": ["omarchy.network", "omarchy.audio"] }
+}
+```
+
+Put `{"id": "tyler.systems"}` in the layout where the mark should sit, with its
+members next to it on the side facing the centre. At rest only the mark shows
+(`muted`). Clicking the mark unfolds the drawer inline along the bar; members
+fade in nearest-first within about 150 ms. Hovering never opens a drawer, so a
+pointer passing along the bar moves nothing. An opened drawer stays open
+(including while a member's popup panel has the pointer) until the mark is
+clicked again. Only one drawer is out at a time. A folded member takes no
+clicks: a click only reaches widgets inside the slot that was clicked. Members
+stay loaded while folded. A drawer without a mark on a bar shows its members
+normally.
+
+### Attention
+
+`Attention.js` reads each widget's own state and answers 0 (quiet), 1 (needs a
+look or has news: `accent`) or 2 (broken or blocked: `urgent`). A member with
+attention stays out of its folded drawer, and the mark takes the strongest
+colour among its members. Hovering the mark lists the reasons. Rises wait 1.5 s
+before counting, so services still starting up never flash trouble. Any widget
+can join without an adapter by exposing `juiceAttention` (0–2) and
+`juiceAttentionReason` on its root item.
+
+Indicators count when Stay Awake, Do Not Disturb, Screen Recording, Dictation
+or a Reminder is on. Night Light never counts: it is the normal evening state.
+
+`{"id": "tyler.scratchpad"}` is an engine-drawn, trouble-only item: the icon of
+an app on `special:scratchpad` that wants attention, in `urgent`. Clicking it
+shows the scratchpad.
+
+### Modes
+
+`bar.modes` (all optional):
+
+- `focus.keep`: ids that stay during focus mode (`focus.on` on the juice state
+  bus). The centre anchor and anything with attention always stay; drawer marks
+  hide.
+- `meeting.promote`: ids brought out of drawers (and kept in focus) during a
+  meeting. A meeting is a running timed event in `meeting.calendar` (default
+  `tmn73.calendar`) that has a meeting link or an RSVP, a recording in
+  `meeting.recorder` (default `jankeesvw.meeting-recorder`), or `meeting.on` on
+  the state bus. `meeting.enabled: false` turns it off.
+- `away.minutes` (default 5) and `away.opacity` (default 0.15): after that long
+  without input (idle inhibitors respected), the bar fades down to that opacity.
+  `away.enabled: false` turns it off.
+
+Mode changes use `Motion.settle`. With `"motion": "reduced"` on the state bus,
+everything jumps to its end state.
+
+### Power-up
+
+Once per login (marker `$XDG_RUNTIME_DIR/tyler-juice/bar-powered-up`), the bar's
+widgets appear left to right (top to bottom on a vertical bar) over about a
+second. Shell reloads and restarts skip it.
+
+### Testing
+
+`$XDG_RUNTIME_DIR/tyler-juice/fake-attention.json`, read only while it exists:
+
+```json
+{ "omarchy.network": 2, "omamail": 1, "tyler.scratchpad": 2, "@meeting": true, "@focus": true, "@away": true }
+```
+
+`omarchy-shell omarchy.bar juice` prints the modes, the power-up phase and each
+slot's drawer, attention and whether it is drawn.
+
+`omarchy-shell omarchy.bar drawer <id> <open|close|toggle|pin>` drives a drawer
+on the focused monitor's bar without a pointer and returns its new state.
+`open` keeps it out for 4 s (longer while the pointer is on it), `close` unpins
+and folds it, `pin` holds it open until `close` or a click on the mark.

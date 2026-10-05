@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "tyler.notifications",
   "name": "My Notifications",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "author": "Omarchy",
-  "description": "Notification daemon, bar inbox, DND, and history. Toasts stay off; notifications go to the bar chip.",
+  "description": "Notification daemon, bar inbox, DND, and history. Toasts stay off; notifications go to the bar chip, which lights on arrival, holds routine ones during focus, fullscreen and meetings, and groups Herdr events by space.",
   "kinds": [
     "service",
     "bar-widget"

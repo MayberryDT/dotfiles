@@ -208,6 +208,95 @@ function nearestDropTarget(candidates, point, vertical) {
   return best
 }
 
+// Drawers group widgets behind one quiet mark. They live beside the layout in
+// `bar.drawers`, keyed by the mark's own layout id:
+//   "drawers": { "tyler.systems": { "label": "Systems", "mark": "dot",
+//                                   "members": ["omarchy.network", ...] } }
+// Every member stays a plain top-level `bar.layout.*` entry. The host enables
+// third-party widgets, writes their inline settings and moves them by walking
+// those entries, so a member nested inside a group entry would stop loading.
+// A widget id belongs to the first drawer that names it.
+function normalizeDrawers(value) {
+  var out = {}
+  if (!isPlainObject(value)) return out
+  var claimed = {}
+  for (var name in value) {
+    var spec = value[name]
+    if (!name || !isPlainObject(spec)) continue
+    var members = []
+    var ids = Array.isArray(spec.members) ? spec.members : []
+    for (var i = 0; i < ids.length; i++) {
+      var id = String(ids[i] || "")
+      if (!id || id === name || claimed[id] || value[id] !== undefined) continue
+      claimed[id] = name
+      members.push(id)
+    }
+    out[name] = {
+      label: String(spec.label || ""),
+      mark: spec.mark === "dots" ? "dots" : "dot",
+      members: members
+    }
+  }
+  return out
+}
+
+function drawerMembership(drawers) {
+  var out = {}
+  for (var name in drawers) {
+    var members = drawers[name].members
+    for (var i = 0; i < members.length; i++) out[members[i]] = name
+  }
+  return out
+}
+
+function idList(value, fallback) {
+  if (!Array.isArray(value)) return fallback.slice()
+  var out = []
+  for (var i = 0; i < value.length; i++) {
+    var id = String(value[i] || "")
+    if (id && out.indexOf(id) === -1) out.push(id)
+  }
+  return out
+}
+
+function boundedNumber(value, fallback, low, high) {
+  var n = Number(value)
+  if (value === undefined || value === null || value === "" || !isFinite(n)) return fallback
+  return Math.max(low, Math.min(high, n))
+}
+
+// `bar.modes`: what focus keeps, what a meeting brings forward, and when and
+// how far the bar fades while nobody is at the machine. The centre anchor is
+// always kept in focus, and anything in trouble always stays.
+var DEFAULT_FOCUS_KEEP = [
+  "omarchy.workspaces", "tyler.workspaces", "jankeesvw.workspace-name",
+  "omarchy.media", "tyler.media", "tyler.juice"
+]
+var DEFAULT_MEETING_PROMOTE = ["omarchy.microphone", "jankeesvw.meeting-recorder", "tmn73.calendar"]
+
+function normalizeModes(value) {
+  var modes = isPlainObject(value) ? value : {}
+  var focus = isPlainObject(modes.focus) ? modes.focus : {}
+  var meeting = isPlainObject(modes.meeting) ? modes.meeting : {}
+  var away = isPlainObject(modes.away) ? modes.away : {}
+  return {
+    focus: {
+      keep: idList(focus.keep, DEFAULT_FOCUS_KEEP)
+    },
+    meeting: {
+      enabled: meeting.enabled !== false,
+      promote: idList(meeting.promote, DEFAULT_MEETING_PROMOTE),
+      calendar: String(meeting.calendar || "tmn73.calendar"),
+      recorder: String(meeting.recorder || "jankeesvw.meeting-recorder")
+    },
+    away: {
+      enabled: away.enabled !== false,
+      minutes: boundedNumber(away.minutes, 5, 1, 240),
+      opacity: boundedNumber(away.opacity, 0.15, 0, 1)
+    }
+  }
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     isDrawnSlot: isDrawnSlot,
@@ -226,6 +315,9 @@ if (typeof module !== "undefined") {
     expandPath: expandPath,
     customModuleSafeName: customModuleSafeName,
     customModuleType: customModuleType,
-    customModulePath: customModulePath
+    customModulePath: customModulePath,
+    normalizeDrawers: normalizeDrawers,
+    drawerMembership: drawerMembership,
+    normalizeModes: normalizeModes
   }
 }

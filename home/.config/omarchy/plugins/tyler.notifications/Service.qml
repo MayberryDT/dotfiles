@@ -5,6 +5,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Hyprland
 import Quickshell.Services.Notifications
 import qs.Commons
 
@@ -67,8 +68,16 @@ Item {
     id: persisted
     reloadableId: "omarchy-notifications"
     property bool doNotDisturb: false
+    // When the inbox was last opened or closed. Rows newer than this are
+    // unseen, and unseen rows are what light the bar chip.
+    property real seenAt: 0
     onDoNotDisturbChanged: {
       // Suppress the write that load-time hydration would otherwise trigger.
+      if (service._hydrating) return
+      service.scheduleSettingsSave()
+    }
+    onSeenAtChanged: {
+      service.recountUnseen()
       if (service._hydrating) return
       service.scheduleSettingsSave()
     }
@@ -81,7 +90,19 @@ Item {
   readonly property alias doNotDisturb: persisted.doNotDisturb
 
   function setDoNotDisturb(value) {
+    if (persisted.doNotDisturb !== !!value) sound(value ? "dnd-on" : "dnd-off")
     persisted.doNotDisturb = !!value
+  }
+
+  function sound(name) {
+    Quickshell.execDetached([service.juiceSoundPath, name])
+  }
+
+  // Tyler cleared the toasts and the inbox himself.
+  function clearAllByHand() {
+    sound("clear")
+    clearPopups()
+    clearHistory()
   }
 
   // popupModel feeds the on-screen toast stack — the only model the service
@@ -100,6 +121,334 @@ Item {
   // Notifications belong in the bar inbox. On-screen toasts stay off.
   readonly property bool showToasts: false
   readonly property int unreadCount: popupModel.count
+
+  // ---------------------------------------------------- arrival, auto DND, digest
+  //
+  // Manual DND (doNotDisturb) is Tyler's own switch and wins over everything
+  // below: nothing reaches the inbox, nothing sounds, criticals included.
+  //
+  // Automatic DND is derived from focus mode (tyler.juice's state bus), a
+  // fullscreen focused window, and a calendar meeting happening now. It holds
+  // routine notifications: they still land in the inbox, but silently, and
+  // are counted. When it ends, the chip shows that count once. Critical
+  // notifications break through it with their sound and a single pulse.
+
+  readonly property string juiceStatePath: {
+    var runtime = Quickshell.env("XDG_RUNTIME_DIR")
+    return runtime ? runtime + "/tyler-juice/state.json" : ""
+  }
+  readonly property string calendarEventsPath: home + "/.local/state/omarchy/calendar-events.json"
+  readonly property string juiceSoundPath: home + "/.local/bin/juice-sound"
+
+  property bool focusOn: false
+  property bool reducedMotion: false
+  property bool fullscreenActive: false
+  property bool meetingActive: false
+  property real meetingEndsAt: 0
+
+  readonly property bool autoDndWanted: focusOn || fullscreenActive || meetingActive
+  readonly property var autoDndReasons: {
+    var reasons = []
+    if (focusOn) reasons.push("focus")
+    if (fullscreenActive) reasons.push("fullscreen")
+    if (meetingActive) reasons.push("meeting")
+    return reasons
+  }
+
+  // Follows autoDndWanted, but lets go only after a short grace, so a window
+  // flicking out of fullscreen for a moment (or a hop between workspaces)
+  // doesn't end the hold and spend the digest.
+  property bool autoDnd: false
+  onAutoDndWantedChanged: {
+    if (autoDndWanted) {
+      autoDndReleaseTimer.stop()
+      autoDnd = true
+    } else if (autoDnd) {
+      autoDndReleaseTimer.restart()
+    }
+  }
+
+  Timer {
+    id: autoDndReleaseTimer
+    interval: 800
+    repeat: false
+    onTriggered: if (!service.autoDndWanted) service.autoDnd = false
+  }
+
+  // Notifications held by the current hold, or by the one that just ended
+  // until the next begins: tyler.juice asks right after leaving focus mode
+  // and must still get the number.
+  property int heldCount: 0
+  property real heldSince: 0
+  property real releasedAt: 0
+  // A hold that held something ended. Widgets show digestCount once per
+  // digestSerial, then settle.
+  property int digestCount: 0
+  property int digestSerial: 0
+
+  onAutoDndChanged: {
+    if (autoDnd) {
+      heldCount = 0
+      heldSince = Date.now()
+      releasedAt = 0
+      return
+    }
+    releasedAt = Date.now()
+    if (heldCount > 0) {
+      digestCount = heldCount
+      digestSerial += 1
+      // One quiet tick per held notification, after the focus-off sound.
+      heldTicks.count = Math.min(6, heldCount)
+      heldTicks.restart()
+    }
+  }
+
+  Timer {
+    id: heldTicks
+    property int count: 0
+    interval: 700
+    onTriggered: service.sound("held-" + count)
+  }
+
+  // A notification reached the inbox without being held. Widgets fade the
+  // chip in; a critical one also pulses once.
+  signal arrived(bool critical)
+
+  // Live rows newer than the last look at the inbox. Zero until the settings
+  // file has said when that look was, so restored rows don't flash lit.
+  property int unseenCount: 0
+  property int unseenCritical: 0
+
+  function recountUnseen() {
+    var count = 0
+    var critical = 0
+    if (service.settingsLoaded) {
+      var seen = persisted.seenAt
+      for (var i = 0; i < popupModel.count; i++) {
+        var row = popupModel.get(i)
+        // originalId -1 is the "No recent notifications" placeholder.
+        if (!row || row.originalId < 0 || Number(row.timestamp || 0) <= seen) continue
+        count++
+        if (row.urgency === NotificationUrgency.Critical) critical++
+      }
+    }
+    if (service.unseenCount !== count) service.unseenCount = count
+    if (service.unseenCritical !== critical) service.unseenCritical = critical
+  }
+
+  function markSeen() {
+    persisted.seenAt = Date.now()
+  }
+
+  Connections {
+    target: popupModel
+    function onCountChanged() { service.recountUnseen() }
+    function onDataChanged() { service.recountUnseen() }
+  }
+
+  onSettingsLoadedChanged: recountUnseen()
+
+  // Not held, so it is announced: the chip lights and juice-sound plays.
+  // juice-sound itself keeps `notify` quiet during focus mode. Herdr rows are
+  // left to Herdr's own blocked/done sounds, low urgency stays silent, and a
+  // burst of routine arrivals sounds once.
+  property real lastSoundAt: 0
+
+  function announceArrival(snapshot, critical) {
+    var now = Date.now()
+    var routineQuiet = snapshot.urgency === NotificationUrgency.Low
+      || now - service.lastSoundAt < 1500
+    if (!NotificationLogic.isHerdrApp(snapshot.app) && (critical || !routineQuiet)) {
+      service.lastSoundAt = now
+      service.sound(critical ? "critical" : "notify")
+    }
+    service.arrived(critical)
+  }
+
+  // Clicking a Herdr row opens its pane through tyler.juice.
+  function focusHerdrPane(pane) {
+    var id = NotificationLogic.herdrPaneId(pane)
+    if (!id) return false
+    Quickshell.execDetached(["omarchy-shell", "tyler.juice", "herdFocus", id])
+    return true
+  }
+
+  function statusObject() {
+    return {
+      manualDnd: service.doNotDisturb,
+      autoDnd: service.autoDnd,
+      reasons: service.autoDndReasons,
+      heldCount: service.heldCount,
+      heldSince: service.heldSince,
+      releasedAt: service.releasedAt,
+      live: popupModel.count,
+      unseen: service.unseenCount,
+      unseenCritical: service.unseenCritical,
+      focus: service.focusOn,
+      fullscreen: service.fullscreenActive,
+      meeting: service.meetingActive,
+      meetingEndsAt: service.meetingEndsAt,
+      motion: service.reducedMotion ? "reduced" : "full"
+    }
+  }
+
+  // Open, close or toggle the inbox on the chip of the focused monitor. Only
+  // one inbox is open at a time.
+  function panelCommand(action) {
+    var widgets = ServiceBridge.widgets()
+    if (widgets.length === 0) return "unavailable"
+    var openOnes = widgets.filter(function(widget) { return widget.popupOpen === true })
+    if (action === "close" || (action === "toggle" && openOnes.length > 0)) {
+      for (var i = 0; i < openOnes.length; i++) openOnes[i].close()
+      return "closed"
+    }
+    var focused = Hyprland.focusedMonitor ? String(Hyprland.focusedMonitor.name || "") : ""
+    var chosen = null
+    for (var j = 0; j < widgets.length; j++) {
+      var widget = widgets[j]
+      if (widget.width <= 0) continue
+      if (!chosen) chosen = widget
+      if (focused && widget.screenName() === focused) {
+        chosen = widget
+        break
+      }
+    }
+    if (!chosen) chosen = widgets[0]
+    for (var k = 0; k < openOnes.length; k++) if (openOnes[k] !== chosen) openOnes[k].close()
+    chosen.open()
+    return "open"
+  }
+
+  // ---- focus mode and reduced motion: tyler.juice's state bus
+
+  function applyJuiceState(raw) {
+    var state = NotificationLogic.parseJuiceState(raw)
+    // Unreadable (mid-write, missing): keep the last good values.
+    if (!state) return
+    if (service.focusOn !== state.focusOn) service.focusOn = state.focusOn
+    if (service.reducedMotion !== state.reducedMotion) service.reducedMotion = state.reducedMotion
+  }
+
+  FileView {
+    id: juiceStateFile
+    path: service.juiceStatePath
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: service.applyJuiceState(text())
+  }
+
+  // The bus is replaced by rename and may not exist yet when the shell
+  // starts, either of which can leave the watch behind; a slow re-read is
+  // the backstop.
+  Timer {
+    interval: 5000
+    repeat: true
+    running: service.juiceStatePath !== ""
+    onTriggered: juiceStateFile.reload()
+  }
+
+  // ---- fullscreen: the focused window's Hyprland fullscreen mode
+
+  Connections {
+    target: Hyprland
+    function onRawEvent(event) {
+      switch (String(event && event.name || "")) {
+      case "fullscreen":
+      case "activewindowv2":
+      case "workspacev2":
+      case "focusedmonv2":
+      case "openwindow":
+      case "closewindow":
+      case "movewindowv2":
+        fullscreenProbeDelay.restart()
+        break
+      }
+    }
+  }
+
+  // Events come in bursts (a workspace switch is several), so one probe
+  // answers the burst.
+  Timer {
+    id: fullscreenProbeDelay
+    interval: 120
+    repeat: false
+    onTriggered: {
+      if (fullscreenProbe.running) {
+        service.fullscreenProbeAgain = true
+        return
+      }
+      fullscreenProbe.running = true
+    }
+  }
+
+  property bool fullscreenProbeAgain: false
+
+  Process {
+    id: fullscreenProbe
+    command: ["hyprctl", "activewindow", "-j"]
+    running: false
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var on = NotificationLogic.activeWindowFullscreen(text)
+        if (service.fullscreenActive !== on) service.fullscreenActive = on
+      }
+    }
+    onExited: {
+      if (!service.fullscreenProbeAgain) return
+      service.fullscreenProbeAgain = false
+      fullscreenProbeDelay.restart()
+    }
+  }
+
+  // ---- meetings: tmn73.calendar's synced events
+
+  property var calendarEvents: []
+
+  function evaluateMeeting() {
+    var now = Date.now()
+    var state = NotificationLogic.meetingState(service.calendarEvents, now)
+    if (service.meetingActive !== state.active) service.meetingActive = state.active
+    service.meetingEndsAt = state.endsAt
+    if (state.nextChangeAt > 0) {
+      // Wake just after the next start or end. Capped so a far-off boundary
+      // doesn't overflow the timer and a suspend can't strand it.
+      meetingBoundaryTimer.interval = Math.max(1000, Math.min(state.nextChangeAt - now + 250, 15 * 60 * 1000))
+      meetingBoundaryTimer.restart()
+    } else {
+      meetingBoundaryTimer.stop()
+    }
+  }
+
+  Timer {
+    id: meetingBoundaryTimer
+    repeat: false
+    onTriggered: service.evaluateMeeting()
+  }
+
+  FileView {
+    id: calendarFile
+    path: service.calendarEventsPath
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      var events = NotificationLogic.parseCalendarEvents(text())
+      // A torn or foreign file keeps the events already known.
+      if (events !== null) service.calendarEvents = events
+      service.evaluateMeeting()
+    }
+  }
+
+  // The sync rewrites the cache every five minutes and may create it after
+  // the shell starts; re-reading once a minute covers a lost watch.
+  Timer {
+    interval: 60000
+    repeat: true
+    running: true
+    onTriggered: calendarFile.reload()
+  }
 
   readonly property int lowPopupDuration: 5000
   readonly property int normalPopupDuration: 8000
@@ -162,13 +511,17 @@ Item {
     // Guard the delete: a newer notification may have reused this originalId
     // (freedesktop replaces_id) and taken over the map slot.
     notification.closed.connect(function() {
-      if (service.liveRefs[snapshot.originalId] === notification)
-        delete service.liveRefs[snapshot.originalId]
+      if (service.liveRefs[snapshot.originalId] !== notification) return
+      delete service.liveRefs[snapshot.originalId]
+      Qt.callLater(function() {
+        // A replacement may have taken this ID while the close was deferred.
+        if (service.liveRefs[snapshot.originalId]) return
+        service.removePopupsByOriginalId(snapshot.originalId, "")
+      })
     })
 
-    // DND bypass rules: chat apps abuse urgency=critical to force
-    // visibility, so critical alone isn't enough — we also require the
-    // sender to be CLI-style. See shouldBypassDnd().
+    // Manual DND. Tyler keeps it on for games, and nothing breaks through it:
+    // see shouldBypassDnd().
     if (service.doNotDisturb && !shouldBypassDnd(notification)) {
       // The toast never shows, so the only record a silenced notification
       // can leave is a history entry. Write it straight into history —
@@ -182,11 +535,21 @@ Item {
       return
     }
 
+    // Automatic DND holds routine notifications: into the inbox, silently,
+    // and counted for the digest. Critical ones break through.
+    var critical = snapshot.urgency === NotificationUrgency.Critical
+    var held = service.autoDnd && !critical
+    if (held) service.heldCount += 1
+
     persistPopupFile(snapshot)
     watchForUpdates(notification, snapshot)
     // Qt.callLater avoids "QV4::Object::insertMember" crashes when a
     // Repeater is mid-incubation while we mutate its model.
     Qt.callLater(function() {
+      if (service.liveRefs[snapshot.originalId] !== notification) {
+        if (!service.liveRefs[snapshot.originalId]) service.deletePopupFileFor(snapshot)
+        return
+      }
       removePopupsByOriginalId(snapshot.originalId, NotificationLogic.popupFileName(snapshot))
       popupModel.insert(0, snapshot)
       service.capLivePopups()
@@ -194,6 +557,7 @@ Item {
       // write to, and a property that already changed will not change again.
       // Reading the object once the row exists catches up on it.
       service.refreshPopup(notification, snapshot.originalId, snapshot.timestamp)
+      if (!held) service.announceArrival(snapshot, critical)
     })
   }
 
@@ -234,7 +598,7 @@ Item {
   // about after the popup exists.
   readonly property var updateSignals: [
     "summaryChanged", "bodyChanged", "appNameChanged", "appIconChanged",
-    "imageChanged", "urgencyChanged", "expireTimeoutChanged", "hintsChanged"
+    "imageChanged", "urgencyChanged", "expireTimeoutChanged", "hintsChanged", "actionsChanged"
   ]
 
   // A client that updates a notification through replaces_id does not produce
@@ -357,6 +721,38 @@ Item {
       service.expirePopup(popupModel.count - 1)
   }
 
+  function actionsForRow(row) {
+    if (!row || isRestoredRow(row) || !liveRefs[row.originalId]) return []
+    return NotificationLogic.actionButtons(row.actionsJson)
+  }
+
+  function invokeInboxAction(row, identifier) {
+    if (!row || !row.isLive) return false
+    for (var i = 0; i < popupModel.count; i++) {
+      var entry = popupModel.get(i)
+      if (entry.originalId === row.id && entry.timestamp === row.timestamp)
+        return invokePopupAction(i, identifier)
+    }
+    return false
+  }
+
+  // Quickshell emits ActionInvoked, then closes nonresident notifications.
+  // The closed handler removes the row; resident notifications stay live.
+  function invokePopupAction(index, identifier) {
+    if (index < 0 || index >= popupModel.count) return false
+    var entry = popupModel.get(index)
+    var ref = !isRestoredRow(entry) ? liveRefs[entry.originalId] : null
+    try {
+      if (!ref) return false
+      for (var i = 0; i < ref.actions.length; i++) {
+        if (ref.actions[i].identifier !== identifier) continue
+        ref.actions[i].invoke()
+        return true
+      }
+    } catch (e) { console.warn("invoke action failed:", e) }
+    return false
+  }
+
   // Run the popup's click action, then dismiss. Omarchy's own toasts carry the
   // action as an argv vector in the `execArgv` role (see execArgvFromHints),
   // which the persistence files preserve, so restored toasts stay clickable.
@@ -374,30 +770,19 @@ Item {
       dismissPopup(index)
       return
     }
+    // A Herdr row opens its pane instead of focusing a window by app name.
+    if (entry && NotificationLogic.isHerdrApp(entry.app) && focusHerdrPane(entry.herdrPane)) {
+      dismissPopup(index)
+      return
+    }
     // Restored rows have no live actions, and looking up liveRefs by their
     // old-generation id could fire an unrelated fresh notification's action.
-    var ref = entry && !isRestoredRow(entry) ? liveRefs[entry.originalId] : null
-    var invoked = false
-    try {
-      if (ref && ref.actions) {
-        for (var i = 0; i < ref.actions.length; i++) {
-          var action = ref.actions[i]
-          if (action && action.identifier === "default") {
-            action.invoke()
-            invoked = true
-            break
-          }
-        }
-      }
-    } catch (e) {
-      // Notification already torn down by the server — fall through to focus.
-      console.warn("invoke default failed:", e)
-    }
+    if (invokePopupAction(index, "default")) return
     // Chat apps (Slack, Discord, Vesktop, etc.) rarely register a "default"
     // libnotify action — they just expect clicking the notification to
     // focus their window. Fall back to focusing the sending app by class so
     // that click-to-jump actually works.
-    if (!invoked) focusApp(entry)
+    focusApp(entry)
     dismissPopup(index)
   }
 
@@ -672,6 +1057,8 @@ Item {
         image: row.image,
         glyph: row.glyph || "",
         execArgv: row.execArgv || "",
+        herdrPane: row.herdrPane || "",
+        herdrSpace: row.herdrSpace || "",
         urgency: row.urgency,
         timestamp: row.timestamp
       }, imagesDir).entry)
@@ -696,6 +1083,8 @@ Item {
         image: "",
         glyph: "󰂚",
         execArgv: "",
+        herdrPane: "",
+        herdrSpace: "",
         urgency: NotificationUrgency.Low,
         expireTimeout: 0,
         timestamp: Date.now()
@@ -823,11 +1212,10 @@ Item {
     var parsed = NotificationLogic.parseSettings(raw)
     if (parsed.error) console.warn("notifications: settings parse failed:", parsed.errorMessage || "")
 
-    if (parsed.dnd !== null) {
-      service._hydrating = true
-      persisted.doNotDisturb = parsed.dnd
-      service._hydrating = false
-    }
+    service._hydrating = true
+    if (parsed.dnd !== null) persisted.doNotDisturb = parsed.dnd
+    if (parsed.seenAt !== null) persisted.seenAt = parsed.seenAt
+    service._hydrating = false
 
     service.settingsLoaded = true
     // Versions before the history moved into its own directory kept every
@@ -837,7 +1225,11 @@ Item {
   }
 
   function flushSettings() {
-    settingsFile.setText(JSON.stringify({ version: 3, dnd: persisted.doNotDisturb }, null, 2) + "\n")
+    settingsFile.setText(JSON.stringify({
+      version: 3,
+      dnd: persisted.doNotDisturb,
+      seenAt: persisted.seenAt
+    }, null, 2) + "\n")
   }
 
   Component.onDestruction: ServiceBridge.clear(service)
@@ -860,10 +1252,36 @@ Item {
       // Safe beside the restore read: it only re-persists entries whose
       // JSON exists, exactly the images the sweep keeps.
       service.sweepOrphanImages()
+      // Nothing in Hyprland has changed yet, so ask once for where things stand.
+      fullscreenProbeDelay.restart()
     })
   }
 
   // ---------------------------------------------------- IPC
+
+  // tyler.juice and keybindings reach the inbox and the digest here. The
+  // chips register through ServiceBridge; see panelCommand.
+  IpcHandler {
+    target: "tyler.notifications"
+
+    function open(): string { return service.panelCommand("open") }
+    function close(): string { return service.panelCommand("close") }
+    function toggle(): string { return service.panelCommand("toggle") }
+
+    // Held by the current automatic DND, or by the one that just ended.
+    function heldCount(): string { return String(service.heldCount) }
+
+    function status(): string { return JSON.stringify(service.statusObject()) }
+
+    function invokeAction(id: int, action: string): string {
+      for (var i = 0; i < popupModel.count; i++) {
+        var row = popupModel.get(i)
+        if (row.originalId === id && !service.isRestoredRow(row))
+          return service.invokePopupAction(i, action) ? "ok" : "unavailable"
+      }
+      return "none"
+    }
+  }
 
   IpcHandler {
     target: "notifications"
@@ -895,11 +1313,13 @@ Item {
 
     // `clear` forgets the recorded history; the toasts on screen stay put.
     function clear(): string {
+      service.sound("clear")
       service.clearHistory()
       return "ok"
     }
 
     function dismissAll(): string {
+      if (popupModel.count > 0) service.sound("clear")
       service.clearPopups()
       return "ok"
     }
@@ -1063,9 +1483,11 @@ Item {
               cornerRadius: service.cornerRadius
               fontFamily: service.shell && service.shell.bar ? service.shell.bar.fontFamily : ""
               glyph: cardSlot.glyph
+              actions: service.actionsForRow(service.popupModel.get(cardSlot.index))
 
               onCloseRequested: service.dismissPopup(cardSlot.index)
               onCardClicked: service.invokePopupDefault(cardSlot.index)
+              onActionRequested: identifier => service.invokePopupAction(cardSlot.index, identifier)
             }
           }
         }
