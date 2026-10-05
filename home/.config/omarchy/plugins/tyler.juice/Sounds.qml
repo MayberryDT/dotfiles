@@ -5,6 +5,7 @@ import Quickshell.Hyprland
 import Quickshell.Services.UPower
 import Quickshell.Services.Pipewire
 import Quickshell.Bluetooth
+import "../tyler.workspaces/WorkspaceNames.js" as Names
 
 // Sounds for what the desktop does that no script of ours announces:
 // workspace switches and carried windows, the scratchpad and drop-downs,
@@ -102,13 +103,19 @@ Item {
   }
 
   // A window sent to another workspace without following it. When the
-  // workspace is changing too, that settle plays the carry instead.
+  // workspace is changing too, that settle plays the carry instead. A window
+  // that keeps its number has crossed monitors (2A to 2B); `zet-workspace-flow
+  // shift` plays that sound itself.
   function settleCarry() {
     if (workspaceSettle.running) return
     var to = movedTo
     movedTo = 0
     if (to <= 0 || to === lastWorkspace || now() - specialAt < 400) return
-    play("ws-carry-" + (to > lastWorkspace ? "right" : "left"))
+    var toNumber = Names.numberOf(to)
+    var hereNumber = Names.numberOf(lastWorkspace)
+    if (toNumber > 0 && toNumber === hereNumber) return
+    var right = toNumber > 0 && hereNumber > 0 ? toNumber > hereNumber : to > lastWorkspace
+    play("ws-carry-" + (right ? "right" : "left"))
   }
 
   Timer { id: workspaceSettle; interval: 45; onTriggered: sounds.settleWorkspace() }
