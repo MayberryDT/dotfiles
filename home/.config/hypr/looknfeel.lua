@@ -109,6 +109,7 @@ hl.config({
   cursor = {
     hide_on_key_press = true,
     warp_on_change_workspace = 0,
+    no_warps = true,
   },
 })
 hl.env("HYPRCURSOR_SIZE", "24")
