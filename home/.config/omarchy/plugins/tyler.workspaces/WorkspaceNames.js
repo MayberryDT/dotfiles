@@ -17,6 +17,9 @@
 //   browser the site part of the tab title ("Analytics / X" -> "X").
 //   terminal the project or cwd part of the title ("tyler@ak1:~/Work/juice" ->
 //           "juice").
+//   shell   a window drawn inside a Quickshell shell (class "org.quickshell",
+//           whichever plugin drew it) is named after the desktop entry called
+//           like the first part of its title ("ibara · console" -> "ibara").
 //   other   the desktop entry name, or a humanised window class.
 // A workspace takes the name and icon of its most recently focused window.
 //
@@ -38,6 +41,9 @@ var BROWSER_CLASSES = [
   "chrome", "vivaldi-stable", "zen", "zen-browser", "librewolf", "microsoft-edge",
   "helium", "org.qutebrowser.qutebrowser", "qutebrowser", "epiphany", "org.gnome.epiphany"
 ]
+
+// The app id Quickshell gives every window it draws.
+var SHELL_CLASS = "org.quickshell"
 
 // Chromium-family --app windows: "<browser>-<host>__<path>-<profile>".
 var WEBAPP_RE = /^(brave|chrome|chromium|google-chrome|msedge|microsoft-edge|vivaldi|helium)-(.+)-(Default|Profile[_ ]\d+)$/i
@@ -246,6 +252,28 @@ function entryForHost(entries, host) {
   return entryCache[key]
 }
 
+// Every plugin window in a Quickshell shell shares SHELL_CLASS, so its title
+// tells the plugins apart: the entry named like the title's first part.
+// Null for other classes, or when no entry has that name.
+function entryForShellWindow(entries, cls, title) {
+  if (!entries || String(cls || "").toLowerCase() !== SHELL_CLASS) return null
+  var lead = clean(String(title || "").split(/\s+[-\u2014\u2013\u00b7|\u2022:]\s+/)[0], 200).toLowerCase()
+  if (!lead) return null
+  syncCache(entries)
+  var key = "s:" + lead
+  if (entryCache.hasOwnProperty(key)) return entryCache[key]
+
+  var found = null
+  var apps = applicationList(entries)
+  for (var i = 0; i < apps.length && !found; i++) {
+    var name = ""
+    try { name = String(apps[i].name || "").toLowerCase() } catch (e) { name = "" }
+    if (name === lead) found = apps[i]
+  }
+  entryCache[key] = entryInfo(found)
+  return entryCache[key]
+}
+
 function hasCategory(info, category) {
   return !!info && info.categories.indexOf(category) !== -1
 }
@@ -381,7 +409,7 @@ function describeWindow(record, herd, entries) {
     }
   }
 
-  var entry = entryForClass(entries, cls, true)
+  var entry = entryForShellWindow(entries, cls, record.title) || entryForClass(entries, cls, true)
   var appName = entry && entry.name ? entry.name : humaniseClass(cls)
 
   if (TERMINAL_CLASSES.indexOf(lower) !== -1 || hasCategory(entry, "TerminalEmulator")) {
