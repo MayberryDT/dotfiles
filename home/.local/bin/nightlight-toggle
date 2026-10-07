@@ -1,0 +1,55 @@
+#!/bin/bash
+# Stronger than Omarchy's packaged 4000K night light: 2400K and 60% gamma.
+NIGHT_TEMP=2400
+NIGHT_GAMMA=60
+DAY_TEMP=6500
+DAY_GAMMA=100
+
+current_temp() {
+  hyprctl hyprsunset temperature 2>/dev/null | grep -oE '[0-9]+' | head -n1
+}
+
+ensure_sunset() {
+  if hyprctl hyprsunset temperature >/dev/null 2>&1; then
+    return 0
+  fi
+  setsid uwsm-app -- hyprsunset >/dev/null 2>&1 &
+  local _
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    sleep 0.2
+    hyprctl hyprsunset temperature >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
+apply() {
+  ensure_sunset || return 1
+  hyprctl hyprsunset temperature "$1" >/dev/null
+  hyprctl hyprsunset gamma "$2" >/dev/null
+}
+
+mode=${1:-toggle}
+case $mode in
+  on) apply "$NIGHT_TEMP" "$NIGHT_GAMMA" ;;
+  off) apply "$DAY_TEMP" "$DAY_GAMMA" ;;
+  status)
+    temp=$(current_temp)
+    if [[ -n $temp && $temp -lt 6000 ]]; then
+      echo on
+    else
+      echo off
+    fi
+    ;;
+  toggle)
+    temp=$(current_temp)
+    if [[ -z $temp || $temp -ge 6000 ]]; then
+      apply "$NIGHT_TEMP" "$NIGHT_GAMMA"
+    else
+      apply "$DAY_TEMP" "$DAY_GAMMA"
+    fi
+    ;;
+  *)
+    echo "usage: nightlight-toggle [on|off|toggle|status]" >&2
+    exit 2
+    ;;
+esac

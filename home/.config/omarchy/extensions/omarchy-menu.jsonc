@@ -27,11 +27,13 @@
   // Example: replace the default About action by reusing the same id. Existing
   // fields are kept unless overridden.
   // "about": {"icon":"","label":"About","action":"omarchy-launch-or-focus-tui \"zsh -c 'fastfetch; read -k 1'\""},
+  "system.displays-off": {"icon":"󰛧","label":"Turn Off Displays","aliases":["displays-off","displays","screens-off"],"description":"Blank every display until a key or mouse move","action":"hyprctl dispatch 'hl.dsp.dpms({action = \"off\"})'"},
   "style.lockscreen": {"icon":"󰌾","label":"Lock Screen","aliases":["lockscreen","lock-screen"],"description":"Preview and choose a lock screen design","action":"omarchy-shell lock explore"},
   "smoke-break": {"icon":"󰎆","label":"Smoke Break","aliases":["smoke-break","smokebreak"],"description":"Play Smoke Break on repeat in CLI Amp","action":"$HOME/.local/bin/juice-media launch --playlist 'Smoke Break' --repeat one"},
   "silver-bullets": {"icon":"󰎆","label":"Silver Bullets","aliases":["silver-bullets","silverbullets","phonk"],"description":"Play Silver Bullets on repeat in CLI Amp","action":"$HOME/.local/bin/juice-media launch --playlist 'Silver Bullets' --repeat one"},
   "tern": {"icon":"","label":"Tern","aliases":["tern"],"description":"Open Tern, the multiplexing terminal","action":"uwsm-app -- $HOME/.local/bin/tern"},
   // Desktop juice: the capture menu's screenshot plays the screenshot moment.
+  "trigger.toggle.nightlight": {"action":"$HOME/.local/bin/nightlight-toggle"},
   "trigger.capture.screenshot": {"action":"juice-screenshot"},
   // Fifth Screenrecord option: record only the webcam + microphone, no screen.
   "trigger.capture.screenrecord.webcam-only": {"icon":"󰖠","label":"Webcam only (with microphone)","when":"omarchy-hw-webcam","action":"$HOME/.local/bin/webcam-recording"}

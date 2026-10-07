@@ -69,5 +69,6 @@ mkdir -p "$dest/.local/bin"
 cp -- "$source_home/.local/bin/voxtype-backup" "$dest/.local/bin/voxtype-backup"
 cp -- "$source_home/.local/bin/webcam-recording" "$dest/.local/bin/webcam-recording"
 cp -- "$source_home/.local/bin/zet-workspace-flow" "$dest/.local/bin/zet-workspace-flow"
+cp -- "$source_home/.local/bin/nightlight-toggle" "$dest/.local/bin/nightlight-toggle"
 
 "$repo_root/scripts/check-public"

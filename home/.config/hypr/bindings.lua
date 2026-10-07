@@ -41,6 +41,10 @@ o.bind("switch:on:Lid Switch", nil, "omarchy-hyprland-monitor-clamshell", { lock
 -- toggle can strand an existing workspace in scrolling mode even after it
 -- saves "dwindle" for the next session.
 hl.unbind("SUPER + L")
+-- Stock night light is 4000K at full brightness. This toggle uses 2400K
+-- and 60% gamma, and restores full brightness when it turns off.
+hl.unbind("SUPER + CTRL + N")
+o.bind("SUPER + CTRL + N", "Toggle nightlight", "/home/tyler/.local/bin/nightlight-toggle")
 
 -- Windows Snipping Tool muscle memory: select a region, copy to clipboard,
 -- and save into ~/Pictures/Screenshots. Print Screen uses the same folder.
