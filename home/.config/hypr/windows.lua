@@ -1,3 +1,7 @@
+-- Prefer the daily-driver external display for new windows. Hyprland falls
+-- back to the active monitor when this output is disconnected.
+o.window({ class = ".*" }, { monitor = "HDMI-A-1" })
+
 -- Hermes Desktop identity. The gateway-window-title plugin sets
 -- document.title after the window maps, so workspace stickiness is handled
 -- by ~/.local/bin/zet-hermes-gateway-windows rather than a workspace= rule.

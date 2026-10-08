@@ -293,7 +293,7 @@ Item {
     }
   }
 
-  // Open, close or toggle the inbox on the chip of the focused monitor. Only
+  // Prefer the external display for the inbox, falling back to the focused monitor. Only
   // one inbox is open at a time.
   function panelCommand(action) {
     var widgets = ServiceBridge.widgets()
@@ -304,6 +304,8 @@ Item {
       return "closed"
     }
     var focused = Hyprland.focusedMonitor ? String(Hyprland.focusedMonitor.name || "") : ""
+    if (widgets.some(function(widget) { return widget.width > 0 && widget.screenName() === "HDMI-A-1" }))
+      focused = "HDMI-A-1"
     var chosen = null
     for (var j = 0; j < widgets.length; j++) {
       var widget = widgets[j]
