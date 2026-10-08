@@ -1,0 +1,9 @@
+{
+  "pack": "felt",
+  "master": 1.0,
+  "volume": {},
+  "off": [
+    "ibara-ask",
+    "ibara-done"
+  ]
+}
