@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# The desktop's sounds.
+#
+#   juice-sound <name>          play a sound, if the quiet rules allow it
+#   juice-sound list            names in the active pack, with their tier
+#   juice-sound pack [name]     show the packs, or switch to one
+#   juice-sound audition [pack] play every sound in a pack, naming each
+#
+# Packs: ~/.local/share/tyler-juice/packs/<pack>/<name>.wav. A pack may leave a
+# name out; that sound is then silent.
+# Settings: ~/.config/tyler-juice/sounds.json
+#   { "pack": "felt", "master": 1.0, "volume": { "<name>": 0.5 }, "off": ["<name>"] }
+# Log: $XDG_RUNTIME_DIR/tyler-juice/sounds.log (what played, what was kept quiet).
+#
+# Quiet rules, by tier:
+#   feedback  answers something you just did; plays unless a rule below says not
+#   info      news; silent in focus mode
+#   alert     needs you; plays in focus mode
+#   meeting:   only critical, battery-low, meeting-soon and the mic sounds
+#   recording: only record-start and record-stop
+set -euo pipefail
+
+data=${XDG_DATA_HOME:-$HOME/.local/share}/tyler-juice
+packs=$data/packs
+config=${XDG_CONFIG_HOME:-$HOME/.config}/tyler-juice/sounds.json
+runtime=${XDG_RUNTIME_DIR:-/run/user/$UID}/tyler-juice
+state=$runtime/state.json
+log=$runtime/sounds.log
+
+tier() {
+  case $1 in
+    notify|discord-notify|done|all-quiet|ibara-done|charger-in|charger-out|bt-connect|bt-disconnect|net-down|net-up|welcome) echo info ;;
+    blocked|ibara-ask|critical|battery-low|timer-end|meeting-soon) echo alert ;;
+    *) echo feedback ;;
+  esac
+}
+
+setting() { # setting <jq filter> <default>
+  [[ -f $config ]] && jq -r "$1 // empty" "$config" 2>/dev/null | grep . || echo "$2"
+}
+
+active_pack() { setting .pack felt; }
+
+note() {
+  mkdir -p "$runtime"
+  printf '%s %s %s\n' "$(date +%T.%3N)" "$1" "$2" >>"$log"
+  if (( $(wc -l <"$log") > 400 )); then
+    tail -n 200 "$log" >"$log.tmp" && mv "$log.tmp" "$log"
+  fi
+}
+
+play() { # play <file> <volume>
+  if command -v pw-play >/dev/null; then
+    exec pw-play --media-role=Notification --volume="$2" "$1"
+  elif command -v paplay >/dev/null; then
+    exec paplay --volume="$(awk -v v="$2" 'BEGIN { printf "%d", v * 65536 }')" "$1"
+  fi
+}
+
+quiet_reason() { # why <name> must stay quiet now, or nothing
+  local name=$1 kind
+  kind=$(tier "$name")
+  if [[ $name != record-* ]] && pgrep -f '^gpu-screen-recorder' >/dev/null 2>&1; then
+    echo recording; return
+  fi
+  if [[ -f $runtime/meeting ]]; then
+    case $name in critical|battery-low|meeting-soon|mic-mute|mic-unmute) ;; *) echo meeting; return ;; esac
+  fi
+  if [[ $kind == info && -f $state ]] && [[ $(jq -r '.focus.on // false' "$state" 2>/dev/null) == true ]]; then
+    echo focus
+  fi
+}
+
+case ${1:-} in
+  ""|-h|--help)
+    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+    exit 0 ;;
+
+  list)
+    pack=$(active_pack)
+    for f in "$packs/$pack"/*.wav; do
+      n=$(basename "$f" .wav)
+      printf '%-18s %s\n' "$n" "$(tier "$n")"
+    done
+    exit 0 ;;
+
+  pack)
+    if [[ -z ${2:-} ]]; then
+      cur=$(active_pack)
+      for d in "$packs"/*/; do
+        p=$(basename "$d")
+        printf '%s %s (%d sounds)\n' "$([[ $p == "$cur" ]] && echo '*' || echo ' ')" "$p" "$(ls "$d" | wc -l)"
+      done
+      exit 0
+    fi
+    [[ -d $packs/$2 ]] || { echo "juice-sound: no pack '$2' in $packs" >&2; exit 2; }
+    mkdir -p "$(dirname "$config")"
+    [[ -f $config ]] || echo '{}' >"$config"
+    jq --arg p "$2" '.pack = $p' "$config" >"$config.tmp" && mv "$config.tmp" "$config"
+    echo "pack: $2"
+    exit 0 ;;
+
+  audition)
+    pack=${2:-$(active_pack)}
+    [[ -d $packs/$pack ]] || { echo "juice-sound: no pack '$pack'" >&2; exit 2; }
+    master=$(setting .master 1)
+    for f in "$packs/$pack"/*.wav; do
+      n=$(basename "$f" .wav)
+      printf '%-18s %s\n' "$n" "$(tier "$n")"
+      pw-play --media-role=Notification --volume="$master" "$f"
+      sleep 0.6
+    done
+    exit 0 ;;
+esac
+
+name=$1
+[[ $name =~ ^[a-z0-9-]+$ ]] || { echo "juice-sound: bad sound name '$name'" >&2; exit 2; }
+
+# One read of the settings: pack, volume for this sound, and whether it is off.
+pack=felt volume=1 off=false
+if [[ -f $config ]]; then
+  IFS=$'\t' read -r pack volume off < <(jq -r --arg n "$name" \
+    '[(.pack // "felt"), ((.master // 1) * (.volume[$n] // 1)), (((.off // []) | index($n)) != null)] | @tsv' \
+    "$config" 2>/dev/null || printf 'felt\t1\tfalse\n')
+fi
+
+file=$packs/$pack/$name.wav
+[[ -f $file ]] || { note "$name" "missing:$pack"; exit 0; }
+[[ $off == true ]] && { note "$name" off; exit 0; }
+
+reason=$(quiet_reason "$name")
+if [[ -n $reason ]]; then
+  note "$name" "quiet:$reason"; exit 0
+fi
+
+note "$name" "play:$volume"
+play "$file" "$volume"

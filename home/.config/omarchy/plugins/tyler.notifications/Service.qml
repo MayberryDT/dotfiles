@@ -260,7 +260,8 @@ Item {
       || now - service.lastSoundAt < 1500
     if (!NotificationLogic.isHerdrApp(snapshot.app) && (critical || !routineQuiet)) {
       service.lastSoundAt = now
-      service.sound(critical ? "critical" : "notify")
+      var discord = /^discord(?:$|[\s._-])/i.test(String(snapshot.app || ""))
+      service.sound(critical ? "critical" : (discord ? "discord-notify" : "notify"))
     }
     service.arrived(critical)
   }
