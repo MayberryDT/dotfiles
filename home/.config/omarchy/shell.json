@@ -103,7 +103,7 @@
           "id": "tyler.juice"
         },
         {
-          "id": "omarchy.notifications"
+          "id": "tyler.notifications"
         }
       ]
     },
@@ -137,7 +137,8 @@
   "version": 1,
   "disabledPlugins": [
     "omarchy.menu",
-    "omarchy.osd"
+    "omarchy.osd",
+    "omarchy.notifications"
   ],
   "idle": {
     "lock": 2147483,

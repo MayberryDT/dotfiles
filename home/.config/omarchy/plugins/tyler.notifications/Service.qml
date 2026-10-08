@@ -254,7 +254,17 @@ Item {
   // burst of routine arrivals sounds once.
   property real lastSoundAt: 0
 
+  // Discord messages stay in the inbox without a second desktop sound or
+  // a delayed focus-mode chime. The unread chip is enough of an indication.
+  function isSilentChat(snapshot) {
+    return /^discord(?:$|[\s._-])/i.test(String(snapshot.app || ""))
+  }
+
   function announceArrival(snapshot, critical) {
+    if (service.isSilentChat(snapshot)) {
+      service.arrived(false)
+      return
+    }
     var now = Date.now()
     var routineQuiet = snapshot.urgency === NotificationUrgency.Low
       || now - service.lastSoundAt < 1500
@@ -539,7 +549,7 @@ Item {
     // and counted for the digest. Critical ones break through.
     var critical = snapshot.urgency === NotificationUrgency.Critical
     var held = service.autoDnd && !critical
-    if (held) service.heldCount += 1
+    if (held && !service.isSilentChat(snapshot)) service.heldCount += 1
 
     persistPopupFile(snapshot)
     watchForUpdates(notification, snapshot)
