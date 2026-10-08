@@ -37,9 +37,9 @@ for their starting workspaces; change them to match your hardware. The
 refreshes (`io.zet.workspace-switcher`) is not part of this mirror; without it,
 the helper still works.
 
-The desktop sound helper `~/.local/bin/juice-sound` is included with the short,
-dry `discord-notify.wav` tap in both sound packs. The rest of the desktop sound
-packs are maintained separately; notification routing is unchanged by this sound.
+The desktop sound helper `~/.local/bin/juice-sound` and each pack's `notify.wav`
+cue are included. Discord uses this shared notification cue, including for urgent
+messages. The rest of the desktop sound packs are maintained separately.
 
 ## Layout
 

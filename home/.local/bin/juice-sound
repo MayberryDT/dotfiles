@@ -29,7 +29,7 @@ log=$runtime/sounds.log
 
 tier() {
   case $1 in
-    notify|discord-notify|done|all-quiet|ibara-done|charger-in|charger-out|bt-connect|bt-disconnect|net-down|net-up|welcome) echo info ;;
+    notify|done|all-quiet|ibara-done|charger-in|charger-out|bt-connect|bt-disconnect|net-down|net-up|welcome) echo info ;;
     blocked|ibara-ask|critical|battery-low|timer-end|meeting-soon) echo alert ;;
     *) echo feedback ;;
   esac
