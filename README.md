@@ -41,6 +41,9 @@ The desktop sound helper `~/.local/bin/juice-sound` and each pack's `notify.wav`
 cue are included. Discord uses this shared notification cue, including for urgent
 messages. The rest of the desktop sound packs are maintained separately.
 
+The clipboard keeper requires the Arch package `wl-clip-persist`. Hyprland
+starts it at login so copied content survives closing its source application.
+
 ## Layout
 
 Files under `home/` mirror paths relative to `$HOME`. Review every file before
