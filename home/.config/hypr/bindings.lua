@@ -143,11 +143,11 @@ hl.on("input.keyboard.key", function(keycode, _, state)
   switcher_key(keycode, state)
 end)
 
--- Start the independent audio backup before Voxtype on either recording key.
+-- Start the independent audio backup before Talkify on either recording key.
 hl.unbind("F9")
-o.bind("F9", "Start dictation (push-to-talk)", "/home/tyler/.local/bin/voxtype-backup start")
-o.bind("F9", "Stop dictation (push-to-talk)", "/home/tyler/.local/bin/voxtype-backup stop", { release = true })
-o.bind("CTRL + SPACE", "Toggle dictation", "/home/tyler/.local/bin/voxtype-backup toggle")
+o.bind("F9", "Start dictation (push-to-talk)", "/home/tyler/.local/bin/talkify-control start")
+o.bind("F9", "Stop dictation (push-to-talk)", "/home/tyler/.local/bin/talkify-control stop", { release = true })
+o.bind("CTRL + SPACE", "Toggle dictation", "/home/tyler/.local/bin/talkify-control toggle")
 o.bind("INSERT", "Reinsert last dictation", "/home/tyler/.local/bin/voxtype-history paste-last")
 o.bind("SUPER + SHIFT + V", "Paste last dictation", "/home/tyler/.local/bin/voxtype-history paste-last")
 o.bind("SUPER + ALT + V", "Dictation history", "/home/tyler/.local/bin/voxtype-history pick")

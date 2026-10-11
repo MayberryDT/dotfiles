@@ -24,9 +24,14 @@ is maintained separately and excluded from this configuration mirror, along
 with screenshots and personal portrait assets. Add your preferred backgrounds
 to `~/.config/omarchy/themes/violet-current/backgrounds/` before selecting it.
 
-The Voxtype keybindings use `~/.local/bin/voxtype-backup` to save local FLAC
-audio during dictation. The helper is included; recordings under
-`~/.local/share/voxtype/recordings/` are private runtime data and are excluded.
+The dictation keybindings use `~/.local/bin/talkify-control` to record with
+Talkify and preserve independent local FLAC backups. The helper is included.
+Talkify uses a separately maintained local GPU backend; its binary, third-party
+plugin source, model, personal vocabulary, private history/Nova integration,
+and service configuration are excluded. Existing `voxtype-history` and
+`voxtype-submap` helpers remain local dependencies for recovery and cancellation.
+Recordings under `~/.local/share/voxtype/recordings/` are private runtime data
+and are excluded. The original `voxtype-backup` helper is retained for rollback.
 
 The numbered-workspace keys use `~/.local/bin/zet-workspace-flow`, which is
 included. Each workspace number spans two monitors: Hyprland workspace N on the

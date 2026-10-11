@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# Save each dictation independently of Voxtype's transcription and history.
+set -euo pipefail
+umask 077
+
+recordings="$HOME/.local/share/voxtype/recordings"
+runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+unit=voxtype-backup.service
+mkdir -p -m 700 "$recordings"
+chmod 700 "$recordings"
+exec 9>"$runtime/voxtype-backup.lock"
+flock -x 9
+
+alert() {
+  logger -t voxtype-backup -- "$1"
+  notify-send -u critical 'Dictation backup' "$1" 2>/dev/null || true
+}
+
+recording() {
+  systemctl --user is-active --quiet "$unit"
+}
+
+stop_audio() {
+  if recording; then
+    systemctl --user stop "$unit" || true
+  fi
+  systemctl --user reset-failed "$unit" 2>/dev/null || true
+}
+
+talkify_recording() {
+  talkify status 2>/dev/null | jq -es 'any(.[]; .t == "recording" and .active == true)' >/dev/null
+}
+
+prune() {
+  find "$recordings" -maxdepth 1 -type f -name '*.flac' -mtime +29 -delete
+}
+
+# Dictation starts as soon as the recorder process exists. The audio device takes
+# ~130 ms to deliver data, so a detached watchdog confirms the file grows and alerts
+# if this take has no backup. It closes the lock fd so stop/cancel never wait on it.
+watch_backup() {
+  local file=$1
+  (
+    exec 9>&-
+    for _ in {1..150}; do
+      [[ -s "$file" ]] && exit 0
+      sleep 0.01
+    done
+    if talkify_recording; then
+      alert 'Audio backup did not start; this take has no saved copy.'
+    fi
+  ) </dev/null >/dev/null 2>&1 &
+}
+
+start() {
+  if recording; then
+    return 0
+  fi
+  systemctl --user reset-failed "$unit" 2>/dev/null || true
+  local file="$recordings/$(date +%Y-%m-%d_%H-%M-%S-%N).flac"
+  if ! systemd-run --user --quiet --unit=voxtype-backup \
+      --property=Type=exec --property=KillSignal=SIGINT \
+      --property=SuccessExitStatus=255 \
+      --property=UMask=0077 \
+      --property=RuntimeMaxSec=1860 -- \
+      ffmpeg -nostdin -hide_banner -loglevel error -f pulse -i "${PULSE_SOURCE:-default}" \
+      -ac 1 -ar 16000 -c:a flac -compression_level 0 -flush_packets 1 \
+      "$file"; then
+    alert 'Audio backup could not start; dictation was not started.'
+    return 1
+  fi
+  if ! talkify "${1:-press}"; then
+    stop_audio
+    alert 'Talkify did not start recording.'
+    return 1
+  fi
+  for _ in {1..20}; do
+    if talkify_recording; then
+      hyprctl eval 'hl.bind("DELETE", hl.dsp.exec_cmd("/home/tyler/.local/bin/talkify-control cancel"), { description = "Cancel dictation" })' >/dev/null
+      watch_backup "$file"
+      return 0
+    fi
+    sleep 0.05
+  done
+  stop_audio
+  alert 'Talkify refused recording; see its settings.'
+  return 1
+}
+
+# A cancelled take keeps its audio but is renamed so recovery does not offer it.
+mark_cancelled() {
+  local newest
+  newest=$(find "$recordings" -maxdepth 1 -type f -name '*.flac' ! -name '*.cancelled.flac' -printf '%f\n' | sort | tail -1)
+  if [[ -n "$newest" ]]; then
+    mv -- "$recordings/$newest" "$recordings/${newest%.flac}.cancelled.flac"
+  fi
+}
+
+case "${1:-}" in
+  start) start ;;
+  stop)
+    if talkify_recording; then talkify release || true; fi
+    /home/tyler/.local/bin/voxtype-submap reset
+    stop_audio
+    prune
+    ;;
+  toggle)
+    if recording || talkify_recording; then
+      if talkify_recording; then talkify toggle || true; fi
+      /home/tyler/.local/bin/voxtype-submap reset
+      stop_audio
+      prune
+    else
+      start toggle
+    fi
+    ;;
+  cancel)
+    talkify cancel || true
+    /home/tyler/.local/bin/voxtype-submap reset
+    if recording; then
+      stop_audio
+      mark_cancelled
+    else
+      stop_audio
+    fi
+    ;;
+  cleanup)
+    stop_audio
+    /home/tyler/.local/bin/voxtype-submap reset
+    ;;
+  last)
+    find "$recordings" -maxdepth 1 -type f -name '*.flac' -printf '%f\n' | sort | tail -1 | sed "s|^|$recordings/|"
+    ;;
+  *)
+    echo 'usage: voxtype-backup start|stop|toggle|cancel|last' >&2
+    exit 2
+    ;;
+esac
