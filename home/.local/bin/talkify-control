@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Save each dictation independently of Voxtype's transcription and history.
+# Save each dictation independently of Talkify's transcription and history.
 set -euo pipefail
 umask 077
 
-recordings="$HOME/.local/share/voxtype/recordings"
+recordings="$HOME/.local/share/talkify/recordings"
 runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-unit=voxtype-backup.service
+unit=talkify-backup.service
 mkdir -p -m 700 "$recordings"
 chmod 700 "$recordings"
-exec 9>"$runtime/voxtype-backup.lock"
+exec 9>"$runtime/talkify-backup.lock"
 flock -x 9
 
 alert() {
-  logger -t voxtype-backup -- "$1"
+  logger -t talkify-backup -- "$1"
   notify-send -u critical 'Dictation backup' "$1" 2>/dev/null || true
 }
 
@@ -58,7 +58,7 @@ start() {
   fi
   systemctl --user reset-failed "$unit" 2>/dev/null || true
   local file="$recordings/$(date +%Y-%m-%d_%H-%M-%S-%N).flac"
-  if ! systemd-run --user --quiet --unit=voxtype-backup \
+  if ! systemd-run --user --quiet --unit=talkify-backup \
       --property=Type=exec --property=KillSignal=SIGINT \
       --property=SuccessExitStatus=255 \
       --property=UMask=0077 \
@@ -100,14 +100,14 @@ case "${1:-}" in
   start) start ;;
   stop)
     if talkify_recording; then talkify release || true; fi
-    /home/tyler/.local/bin/voxtype-submap reset
+    /home/tyler/.local/bin/talkify-submap reset
     stop_audio
     prune
     ;;
   toggle)
     if recording || talkify_recording; then
       if talkify_recording; then talkify toggle || true; fi
-      /home/tyler/.local/bin/voxtype-submap reset
+      /home/tyler/.local/bin/talkify-submap reset
       stop_audio
       prune
     else
@@ -116,7 +116,7 @@ case "${1:-}" in
     ;;
   cancel)
     talkify cancel || true
-    /home/tyler/.local/bin/voxtype-submap reset
+    /home/tyler/.local/bin/talkify-submap reset
     if recording; then
       stop_audio
       mark_cancelled
@@ -126,13 +126,13 @@ case "${1:-}" in
     ;;
   cleanup)
     stop_audio
-    /home/tyler/.local/bin/voxtype-submap reset
+    /home/tyler/.local/bin/talkify-submap reset
     ;;
   last)
     find "$recordings" -maxdepth 1 -type f -name '*.flac' -printf '%f\n' | sort | tail -1 | sed "s|^|$recordings/|"
     ;;
   *)
-    echo 'usage: voxtype-backup start|stop|toggle|cancel|last' >&2
+    echo 'usage: talkify-backup start|stop|toggle|cancel|last' >&2
     exit 2
     ;;
 esac

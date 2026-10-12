@@ -15,16 +15,17 @@ BarIndicator {
   inactiveTooltipText: "Dictate"
 
   function update(raw) {
-    var data = extractData(raw)
-
-    state = String(data.alt || data.class || "idle")
+    var data
+    try { data = JSON.parse(raw) } catch (e) { return }
+    if (data.t !== "recording") return
+    state = data.active ? "recording" : "idle"
     if (state === "recording") icon = "󰍬"
     else if (state === "transcribing") icon = "󰔟"
     else icon = ""
   }
 
   Process {
-    command: ["bash", "-c", "omarchy-voxtype-status"]
+    command: ["talkify", "watch"]
     running: true
     stdout: SplitParser {
       onRead: function(data) { root.update(data) }
@@ -33,6 +34,6 @@ BarIndicator {
 
   onPressed: function() {
     if (!root.bar) return
-    root.bar.run("omarchy-voxtype-config")
+    root.bar.run("omarchy-shell tornikegomareli.talkify open")
   }
 }

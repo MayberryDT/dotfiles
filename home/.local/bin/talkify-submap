@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Bind Delete only while Talkify is recording without entering a Hyprland
+# submap. Submaps suppress normal global shortcuts, which is not acceptable
+# during dictation.
+set -euo pipefail
+
+case "${1:-}" in
+  arm)
+    hyprctl eval 'hl.bind("DELETE", hl.dsp.exec_cmd("/home/tyler/.local/bin/talkify-control cancel"), { description = "Cancel dictation" })' >/dev/null
+    ;;
+  reset)
+    # Leave any legacy recording submap and remove the temporary base-map bind.
+    hyprctl dispatch submap reset >/dev/null 2>&1 || true
+    hyprctl eval 'hl.unbind("DELETE")' >/dev/null 2>&1 || true
+    ;;
+  *)
+    echo "usage: talkify-submap arm|reset" >&2
+    exit 2
+    ;;
+esac

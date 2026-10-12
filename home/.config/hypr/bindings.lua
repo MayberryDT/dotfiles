@@ -25,7 +25,6 @@
 
 -- Logitech MX Keys examples:
 -- o.bind("SUPER + SHIFT + S", nil, "omarchy-capture-screenshot")
--- o.bind("SUPER + H", nil, "voxtype record toggle")
 -- o.bind("SUPER + PERIOD", nil, "omarchy-shell shell toggle omarchy.emojis")
 
 hl.unbind("SUPER + CTRL + X")
@@ -148,10 +147,10 @@ hl.unbind("F9")
 o.bind("F9", "Start dictation (push-to-talk)", "/home/tyler/.local/bin/talkify-control start")
 o.bind("F9", "Stop dictation (push-to-talk)", "/home/tyler/.local/bin/talkify-control stop", { release = true })
 o.bind("CTRL + SPACE", "Toggle dictation", "/home/tyler/.local/bin/talkify-control toggle")
-o.bind("INSERT", "Reinsert last dictation", "/home/tyler/.local/bin/voxtype-history paste-last")
-o.bind("SUPER + SHIFT + V", "Paste last dictation", "/home/tyler/.local/bin/voxtype-history paste-last")
-o.bind("SUPER + ALT + V", "Dictation history", "/home/tyler/.local/bin/voxtype-history pick")
-o.bind("SUPER + ALT + R", "Transcribe failed dictation again", "/home/tyler/.local/bin/voxtype-history recover")
+o.bind("INSERT", "Reinsert last dictation", "/home/tyler/.local/bin/talkify-history paste-last")
+o.bind("SUPER + SHIFT + V", "Paste last dictation", "/home/tyler/.local/bin/talkify-history paste-last")
+o.bind("SUPER + ALT + V", "Dictation history", "/home/tyler/.local/bin/talkify-history pick")
+o.bind("SUPER + ALT + R", "Transcribe failed dictation again", "/home/tyler/.local/bin/talkify-history recover")
 o.bind("SUPER + SHIFT + CTRL + A", "Zet", "/home/tyler/.local/bin/hermes-desktop-launch")
 
 -- Leave Shift+Tab available to applications.

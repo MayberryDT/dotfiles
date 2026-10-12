@@ -149,7 +149,8 @@ Item {
     var state = ""
     try {
       var data = JSON.parse(line)
-      state = String(data.alt || data.class || "idle")
+      if (data.t !== "recording") return
+      state = data.active ? "recording" : "idle"
     } catch (e) { return }
     var before = dictation
     dictation = state
@@ -159,13 +160,13 @@ Item {
   }
 
   Process {
-    id: voxtype
+    id: talkify
     running: true
-    command: ["voxtype", "status", "--follow", "--extended", "--format", "json"]
+    command: ["talkify", "watch"]
     stdout: SplitParser { onRead: function(line) { sounds.readDictation(line) } }
-    onExited: { sounds.dictation = ""; restartVoxtype.start() }
+    onExited: { sounds.dictation = ""; restartTalkify.start() }
   }
-  Timer { id: restartVoxtype; interval: 30000; onTriggered: voxtype.running = true }
+  Timer { id: restartTalkify; interval: 30000; onTriggered: talkify.running = true }
 
   // ------------------------------------------------------ screen recording
 

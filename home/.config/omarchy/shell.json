@@ -30,7 +30,14 @@
           "id": "omarchy.keyboard-layout"
         },
         {
-          "id": "omarchy.indicators"
+          "id": "omarchy.indicators",
+          "items": [
+            "ScreenRecording",
+            "Reminder",
+            "NightLight",
+            "Dnd",
+            "StayAwake"
+          ]
         },
         {
           "id": "lifetime.time-visualizer",

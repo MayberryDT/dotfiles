@@ -60,3 +60,5 @@ hardware-specific even though secrets and private runtime data are excluded.
 Run `./scripts/sync-from-home`, review the diff, and run
 `./scripts/check-public` before committing. Finalized changes are committed and
 pushed to `main`; the local Omarchy workspace instructions enforce that rule.
+
+Talkify GPU runtime packages, model files, vocabulary, history, audio backups and the personal Nova output hook stay private. The public files contain the shortcut/backup wrapper and desktop integration only; third-party Talkify source stays in its own checkout.
