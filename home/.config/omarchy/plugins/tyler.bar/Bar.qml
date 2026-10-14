@@ -157,13 +157,6 @@ Item {
   function juiceSound(name) {
     Quickshell.execDetached([juiceSoundBin, name])
   }
-  // juice-sound keeps quiet during a meeting, and meetings are known here.
-  function syncMeetingFlag() {
-    if (!juiceRuntimeReady) return
-    Quickshell.execDetached(meetingOn ? ["touch", juiceRuntimeDir + "/meeting"] : ["rm", "-f", juiceRuntimeDir + "/meeting"])
-  }
-  onMeetingOnChanged: syncMeetingFlag()
-  onJuiceRuntimeReadyChanged: syncMeetingFlag()
   onAwayOnChanged: if (!awayOn) juiceSound("welcome")
   // The day's first login gets a chord as the bar powers up.
   function loginChord() {

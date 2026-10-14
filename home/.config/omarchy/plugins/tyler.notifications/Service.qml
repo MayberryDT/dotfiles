@@ -127,10 +127,10 @@ Item {
   // Manual DND (doNotDisturb) is Tyler's own switch and wins over everything
   // below: nothing reaches the inbox, nothing sounds, criticals included.
   //
-  // Automatic DND is derived from focus mode (tyler.juice's state bus), a
-  // fullscreen focused window, and a calendar meeting happening now. It holds
-  // routine notifications: they still land in the inbox, but silently, and
-  // are counted. When it ends, the chip shows that count once. Critical
+  // Automatic DND is derived from focus mode (tyler.juice's state bus) and a
+  // fullscreen focused window. A calendar meeting does not hold sounds.
+  // Routine notifications still land in the inbox, but silently, and are
+  // counted. When it ends, the chip shows that count once. Critical
   // notifications break through it with their sound and a single pulse.
 
   readonly property string juiceStatePath: {
@@ -146,12 +146,11 @@ Item {
   property bool meetingActive: false
   property real meetingEndsAt: 0
 
-  readonly property bool autoDndWanted: focusOn || fullscreenActive || meetingActive
+  readonly property bool autoDndWanted: focusOn || fullscreenActive
   readonly property var autoDndReasons: {
     var reasons = []
     if (focusOn) reasons.push("focus")
     if (fullscreenActive) reasons.push("fullscreen")
-    if (meetingActive) reasons.push("meeting")
     return reasons
   }
 

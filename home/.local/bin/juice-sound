@@ -16,7 +16,6 @@
 #   feedback  answers something you just did; plays unless a rule below says not
 #   info      news; silent in focus mode
 #   alert     needs you; plays in focus mode
-#   meeting:   only critical, battery-low, meeting-soon and the mic sounds
 #   recording: only record-start and record-stop
 set -euo pipefail
 
@@ -62,9 +61,6 @@ quiet_reason() { # why <name> must stay quiet now, or nothing
   kind=$(tier "$name")
   if [[ $name != record-* ]] && pgrep -f '^gpu-screen-recorder' >/dev/null 2>&1; then
     echo recording; return
-  fi
-  if [[ -f $runtime/meeting ]]; then
-    case $name in critical|battery-low|meeting-soon|mic-mute|mic-unmute) ;; *) echo meeting; return ;; esac
   fi
   if [[ $kind == info && -f $state ]] && [[ $(jq -r '.focus.on // false' "$state" 2>/dev/null) == true ]]; then
     echo focus
