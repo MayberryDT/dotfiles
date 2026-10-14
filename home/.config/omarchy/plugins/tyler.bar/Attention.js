@@ -220,6 +220,17 @@ function evaluate(id, item, ctx) {
   return best
 }
 
+// Google types that sit on the calendar without anyone to meet. Same set as
+// tyler.notifications NotificationLogic.isMeetingEvent. A Gmail flight
+// reservation is accepted and has no meeting link, and it is not a meeting.
+var NON_MEETING_EVENT_TYPES = {
+  fromGmail: true,
+  workingLocation: true,
+  outOfOffice: true,
+  focusTime: true,
+  birthday: true
+}
+
 // A calendar event counts as a meeting while it is running, is timed, was not
 // declined, and involves someone else: it carries a meeting link or an RSVP
 // (Google only reports a response status when there are attendees). A block
@@ -230,6 +241,7 @@ function meetingNow(events, nowMs) {
   for (var i = 0; i < rows.length; i++) {
     var event = rows[i]
     if (!event || event.allDay) continue
+    if (NON_MEETING_EVENT_TYPES[String(event.eventType || "")]) continue
     var start = Date.parse(event.start)
     var end = Date.parse(event.end)
     if (!isFinite(start) || !isFinite(end) || !(start <= nowMs && nowMs < end)) continue
