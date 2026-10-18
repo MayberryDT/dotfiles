@@ -7,6 +7,7 @@ import QtQuick
 import QtQuick.Effects
 import QtQuick.Layouts
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "BarModel.js" as BarModel
 import "Attention.js" as Attention
@@ -62,14 +63,14 @@ Item {
   property string fontFamily: Style.font.family
   // Bound to the central Color singleton so the bar tracks shell.toml's
   // [bar] section. Property names kept for the rest of this file's bindings.
-  property color themeForeground: Color.bar.text
-  property color themeContrastForeground: Color.background
-  property color transparentForeground: Color.bar.text
+  property color themeForeground: Commons.Color.bar.text
+  property color themeContrastForeground: Commons.Color.background
+  property color transparentForeground: Commons.Color.bar.text
   property color foreground: themeForeground
   property color barForeground: useTransparentForeground ? transparentForeground : themeForeground
   property bool foregroundAnimationEnabled: true
-  property color background: Color.bar.background
-  property color urgent: Color.bar.active
+  property color background: Commons.Color.bar.background
+  property color urgent: Commons.Color.bar.active
 
   Behavior on barForeground { enabled: root.foregroundAnimationEnabled; ColorAnimation { duration: 420; easing.type: Easing.InOutCubic } }
   Behavior on background { ColorAnimation { duration: 420; easing.type: Easing.InOutCubic } }
@@ -1504,8 +1505,8 @@ Item {
         id: tooltipBubble
         implicitWidth: tooltipLabel.implicitWidth + 20
         implicitHeight: tooltipLabel.implicitHeight + 14
-        color: Color.tooltip.background
-        borderSpec: Border.surfaceSpec("tooltip", "border", Color.tooltip.border, 1)
+        color: Commons.Color.tooltip.background
+        borderSpec: Border.surfaceSpec("tooltip", "border", Commons.Color.tooltip.border, 1)
         radius: Style.cornerRadius
 
         Text {
@@ -1513,7 +1514,7 @@ Item {
           textFormat: Text.PlainText
           anchors.centerIn: parent
           text: root.tooltipText
-          color: Color.tooltip.text
+          color: Commons.Color.tooltip.text
           font.family: root.fontFamily
           font.pixelSize: Style.font.body
           horizontalAlignment: Text.AlignHCenter
@@ -1636,7 +1637,7 @@ Item {
       y: targetRect ? Math.round(targetRect.y) : 0
       width: targetRect ? targetRect.width : 0
       height: targetRect ? targetRect.height : 0
-      color: Color.accent
+      color: Commons.Color.accent
       radius: Math.min(width, height) / 2
     }
   }
@@ -2329,7 +2330,7 @@ Item {
 
       visible: opacity > 0
       opacity: slot.panelOpen && !slot.dragSource ? 0.9 : 0
-      color: Color.accent
+      color: Commons.Color.accent
       radius: Math.min(width, height) / 2
       width: root.vertical ? Style.space(2) : slot.panelIndicatorExtent
       height: root.vertical ? slot.panelIndicatorExtent : Style.space(2)
@@ -2674,10 +2675,10 @@ Item {
     readonly property bool open: hub ? hub.isOpen(name) : false
     readonly property bool pinned: hub ? hub.isPinned(name) : false
     readonly property bool tooltipHovered: markHover.hovered
-    readonly property color restInk: root.transparent ? root.barForeground : Color.muted
+    readonly property color restInk: root.transparent ? root.barForeground : Commons.Color.muted
     // Not readonly: it carries a colour Behavior.
-    property color ink: level >= 2 ? Color.urgent
-      : level === 1 ? Color.accent
+    property color ink: level >= 2 ? Commons.Color.urgent
+      : level === 1 ? Commons.Color.accent
       : (open ? root.barForeground : restInk)
     // On a transparent bar the text colour is picked against the wallpaper,
     // so "muted" there is that colour, quietened.
@@ -2812,7 +2813,7 @@ Item {
       source: padIcon
       visible: padIcon.status === Image.Ready
       colorization: 1.0
-      colorizationColor: Color.urgent
+      colorizationColor: Commons.Color.urgent
     }
 
     // No icon to be found: a plain urgent tile in its place.
@@ -2822,7 +2823,7 @@ Item {
       width: Style.space(10)
       height: width
       radius: Style.space(2)
-      color: Color.urgent
+      color: Commons.Color.urgent
     }
   }
 

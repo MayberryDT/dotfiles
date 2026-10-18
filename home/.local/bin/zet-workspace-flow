@@ -9,6 +9,7 @@ Every numbered-workspace key goes through this script.
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import subprocess
@@ -21,6 +22,10 @@ COUNT = 10  # workspace numbers; the right monitor's Hyprland ids are offset by 
 STATE_DIR = Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / "zet-workspace-flow"
 ANIMATION_TOKEN = STATE_DIR / "animation-token"
 PREVIOUS = STATE_DIR / "previous"
+VIEW_LOCK = STATE_DIR / "lock"
+# While a command of ours is moving both monitors, ignore the workspace
+# events that movement raises so follow does not undo it.
+FOLLOW_SUPPRESS = STATE_DIR / "suppress-follow"
 
 BASE_ANIMATION = (
     'hl.animation({ leaf = "workspaces", enabled = true, speed = 4, '
@@ -35,6 +40,7 @@ USAGE = """usage: zet-workspace-flow COMMAND
   left|right|cycle [move]   step or cycle the pair; move takes the focused window
   scroll up|down            step the pair one workspace
   goto N                    show workspace N on both monitors
+  follow                    pair the other monitor with the focused one
   previous                  go back to the workspace shown before
   send N [silent]           move the focused window to N on its monitor
   windows next|prev         focus the next window on either monitor
@@ -137,13 +143,75 @@ def show_switcher(workspace_number: int) -> None:
     spawn(["omarchy-shell", "-q", "io.zet.workspace-switcher", "show", payload])
 
 
+class ViewLock:
+    """One workspace change at a time. follow waits out a change we started."""
+
+    def __enter__(self):
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        self._fd = os.open(VIEW_LOCK, os.O_CREAT | os.O_RDWR, 0o644)
+        fcntl.flock(self._fd, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *_args) -> None:
+        fcntl.flock(self._fd, fcntl.LOCK_UN)
+        os.close(self._fd)
+
+
+def suppress_follow(seconds: float = 0.6) -> None:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    FOLLOW_SUPPRESS.write_text(f"{time.time() + seconds}\n", encoding="utf-8")
+
+
+def follow_suppressed() -> bool:
+    try:
+        return time.time() < float(FOLLOW_SUPPRESS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+
+
+def shown_numbers(monitors: list[dict]) -> list[int]:
+    return [number(int(m["activeWorkspace"]["id"])) for m in monitors]
+
+
+def views_agree(monitors: list[dict]) -> bool:
+    nums = [n for n in shown_numbers(monitors) if n]
+    return len(set(nums)) <= 1
+
+
 def change_view(view: int, target: int, monitors: list[dict], before: str = "", after: str = "") -> None:
     """Show `target` on every monitor, remembering `view` for `previous`."""
-    if target != view:
-        STATE_DIR.mkdir(parents=True, exist_ok=True)
-        PREVIOUS.write_text(f"{view}\n", encoding="utf-8")
-    eval_hypr(*filter(None, (before, set_view(target, monitors), after)))
+    with ViewLock():
+        if target != view:
+            PREVIOUS.write_text(f"{view}\n", encoding="utf-8")
+        suppress_follow()
+        eval_hypr(*filter(None, (before, set_view(target, monitors), after)))
     show_switcher(target)
+
+
+def follow(monitors: list[dict]) -> None:
+    """A link or another app focused one half. Bring the other monitor with it.
+
+    The focused monitor's number wins. A special workspace is left alone, and
+    a change this script just made is ignored.
+    """
+    with ViewLock():
+        if follow_suppressed() or len(monitors) < 2:
+            return
+        # The lock waited. Read the monitors again; the first look may be stale.
+        monitors = view_monitors()
+        if follow_suppressed() or len(monitors) < 2 or views_agree(monitors):
+            return
+        focused = next((m for m in monitors if m.get("focused")), None)
+        if focused is None:
+            return
+        target = number(int(focused["activeWorkspace"]["id"]))
+        if not target:
+            return
+        previous = next((n for n in shown_numbers(monitors) if n and n != target), 0)
+        if previous:
+            PREVIOUS.write_text(f"{previous}\n", encoding="utf-8")
+        suppress_follow()
+        eval_hypr(set_view(target, monitors))
 
 
 def previous_view() -> int:
@@ -307,7 +375,9 @@ def sync(monitors: list[dict]) -> None:
             for c in hypr_json("clients")
             if number(int(c["workspace"]["id"])) and side(int(c["workspace"]["id"])) == 1
         ]
-    eval_hypr(*moves, set_view(current_view(monitors), monitors))
+    with ViewLock():
+        suppress_follow()
+        eval_hypr(*moves, set_view(current_view(monitors), monitors))
 
 
 # ---------------------------------------------------------------- main
@@ -332,7 +402,7 @@ def valid(command: str, rest: list[str]) -> bool:
         return rest in (["next"], ["prev"])
     if command == "shift":
         return rest in (["left"], ["right"])
-    return command in ("previous", "sync") and not rest
+    return command in ("previous", "sync", "follow") and not rest
 
 
 def main(argv: list[str]) -> int:
@@ -350,6 +420,8 @@ def main(argv: list[str]) -> int:
 
     if command == "sync":
         sync(monitors)
+    elif command == "follow":
+        follow(monitors)
     elif command == "windows":
         cycle_windows(1 if rest == ["next"] else -1, monitors)
     elif command == "shift":
@@ -367,7 +439,9 @@ def main(argv: list[str]) -> int:
             target = previous_view()
         else:
             target = next_occupied(view)
-        if not target or target == view:
+        # The left monitor's number alone is not "already there": a link can
+        # leave the other monitor behind, and a click of that number must repair it.
+        if not target or (target == view and views_agree(monitors)):
             return 0
         if rest == ["move"]:
             carry_window(target, view, monitors)

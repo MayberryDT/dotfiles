@@ -5,6 +5,7 @@ import QtQuick.Window
 import Quickshell
 import Quickshell.Hyprland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "WorkspaceNames.js" as Names
 import "HubBridge.js" as HubBridge
@@ -14,10 +15,10 @@ import "../tyler.juice/Motion.js" as Motion
 //
 // Each workspace shows the icon of its most recently focused window at number
 // width; an empty one shows its number. Brightness carries the state:
-//   empty      Color.muted number
+//   empty      Commons.Color.muted number
 //   occupied   bar foreground, a little dimmed
-//   current    full bar foreground and a thin Color.accent underline
-//   attention  Color.urgent (a window asked for attention, or the workspace
+//   current    full bar foreground and a thin Commons.Color.accent underline
+//   attention  Commons.Color.urgent (a window asked for attention, or the workspace
 //              holds the Herdr window while an agent is blocked), one pulse
 // The derived name is in the tooltip and, while Super is held, in a small
 // label strip (the "peek") beside the row. Names never sit on the bar.
@@ -62,7 +63,7 @@ BarWidget {
   }
   readonly property bool monitorFocused: root.barMonitor === null || Hyprland.focusedMonitor === root.barMonitor
 
-  readonly property color barFg: root.bar ? root.bar.barForeground : Color.foreground
+  readonly property color barFg: root.bar ? root.bar.barForeground : Commons.Color.foreground
   readonly property string position: root.bar && root.bar.position ? String(root.bar.position) : "top"
 
   // The Hyprland workspaces (one per monitor) that make up workspace number n.
@@ -140,7 +141,7 @@ BarWidget {
           || halves.some(function(w) { return w.toplevels.values.length > 0 })
         readonly property bool current: root.currentId === modelData
         readonly property bool attention: info.attention || halves.some(function(w) { return w.urgent === true })
-        readonly property color tone: attention ? Color.urgent : (occupied || current ? root.barFg : Color.muted)
+        readonly property color tone: attention ? Commons.Color.urgent : (occupied || current ? root.barFg : Commons.Color.muted)
         readonly property real baseOpacity: attention || current || !occupied ? 1 : 0.72
         readonly property string source: occupied ? root.iconSource(info.icon) : ""
         readonly property bool iconShown: source !== "" && iconImage.status === Image.Ready
@@ -224,7 +225,7 @@ BarWidget {
           readonly property int thickness: Math.max(1, Style.space(2))
           readonly property int extent: Math.round(root.barSize * 0.36)
 
-          color: slot.attention ? Color.urgent : Color.accent
+          color: slot.attention ? Commons.Color.urgent : Commons.Color.accent
           radius: thickness / 2
           opacity: slot.current ? (root.monitorFocused ? 0.95 : 0.45) : 0
           visible: opacity > 0
@@ -332,8 +333,8 @@ BarWidget {
         width: implicitWidth
         height: implicitHeight
         radius: Style.cornerRadius
-        color: Color.popups.background
-        borderSpec: Border.flat(Util.alpha(Color.popups.text, 0.16), Math.max(1, Style.normalBorderWidth))
+        color: Commons.Color.popups.background
+        borderSpec: Border.flat(Util.alpha(Commons.Color.popups.text, 0.16), Math.max(1, Style.normalBorderWidth))
 
         Row {
           id: stripRow
@@ -394,8 +395,8 @@ BarWidget {
             // Vertical slots are barSize tall, Style.space(2) apart (see grid).
             y: index * (root.barSize + Style.space(2)) + (root.barSize - height) / 2
             radius: Style.cornerRadius
-            color: Color.popups.background
-            borderSpec: Border.flat(Util.alpha(Color.popups.text, 0.16), Math.max(1, Style.normalBorderWidth))
+            color: Commons.Color.popups.background
+            borderSpec: Border.flat(Util.alpha(Commons.Color.popups.text, 0.16), Math.max(1, Style.normalBorderWidth))
 
             PeekChip {
               id: pillChip
@@ -419,7 +420,7 @@ BarWidget {
 
     readonly property var info: Names.pairFor(root.model, workspaceId)
     readonly property bool current: workspaceId === root.currentId
-    readonly property color tone: info.attention ? Color.urgent : Color.popups.text
+    readonly property color tone: info.attention ? Commons.Color.urgent : Commons.Color.popups.text
     readonly property string source: info.occupied ? root.iconSource(info.icon) : ""
     readonly property bool iconShown: source !== "" && chipIcon.status === Image.Ready
     readonly property bool colourise: info.attention || (info.occupied && root.iconIsSymbolic(info.icon))
@@ -497,7 +498,7 @@ BarWidget {
         anchors.verticalCenter: parent.verticalCenter
         text: chip.info.number
         textFormat: Text.PlainText
-        color: chip.info.attention ? Color.urgent : Color.popups.text
+        color: chip.info.attention ? Commons.Color.urgent : Commons.Color.popups.text
         opacity: 0.55
         font.family: Style.font.menuFamily
         font.pixelSize: Style.font.bodySmall
@@ -523,7 +524,7 @@ BarWidget {
       anchors.topMargin: Style.space(2)
       height: Math.max(1, Style.space(2))
       radius: height / 2
-      color: chip.info.attention ? Color.urgent : Color.accent
+      color: chip.info.attention ? Commons.Color.urgent : Commons.Color.accent
       opacity: chip.current ? 0.95 : 0
     }
   }

@@ -24,3 +24,9 @@ for _, event in ipairs({ "monitor.added", "monitor.removed" }) do
     hl.exec_cmd("/home/tyler/.local/bin/zet-workspace-flow sync")
   end)
 end
+
+-- Anything other than the flow script (a link focusing the browser, a
+-- notification) moves one monitor. Pair the other half with it.
+hl.on("workspace.active", function()
+  hl.exec_cmd("/home/tyler/.local/bin/zet-workspace-flow follow")
+end)
