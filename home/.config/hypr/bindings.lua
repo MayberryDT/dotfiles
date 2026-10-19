@@ -262,3 +262,5 @@ o.bind("SUPER + SHIFT + F", "File manager", { launch = "/home/tyler/.local/bin/s
 o.bind("SUPER + ALT + SHIFT + F", "File manager (cwd)",
   "uwsm-app -- /home/tyler/.local/bin/strata \"$(omarchy-cmd-terminal-cwd)\"")
 -- strata-installer: file-manager end
+
+o.bind("SUPER + D", "Catch downloads", "omarchy-shell shell toggle io.github.tahadx.catch '{}'")
