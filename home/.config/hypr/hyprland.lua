@@ -60,3 +60,18 @@ require("hypr.omaroll")
 
 -- Desktop juice (loaded last)
 require("hypr.juice")
+
+-- Vicinae is a layer-shell launcher. Pop it in without a compositor fade.
+-- Blur stays off globally in looknfeel.lua, so the blur rule is inert until
+-- that changes. https://docs.vicinae.com/quickstart/hyprland-lua
+hl.layer_rule({
+  match = { namespace = "vicinae" },
+  name = "vicinae-blur",
+  blur = true,
+  ignore_alpha = 0,
+})
+hl.layer_rule({
+  match = { namespace = "vicinae" },
+  name = "vicinae-no-animation",
+  no_anim = true,
+})

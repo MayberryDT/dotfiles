@@ -246,9 +246,9 @@ o.bind("SUPER + CTRL + X", "Post to X", "/home/tyler/.local/bin/zet-x-compose")
 o.bind("SUPER + ALT + C", "Cue sheet", "/home/tyler/.local/bin/zet-cue-sheet")
 o.bind("SUPER + ALT + A", "Cue sheet answer", "/home/tyler/.local/bin/zet-cue-sheet answer")
 
--- File Search overlay (localsearch full-text). Replaces Omarchy Find on Alt+Space.
--- Super+Space is the Omarchy menu.
-o.bind("ALT + SPACE", "File search", "omarchy-shell -q shell toggle io.github.corck.filesearch '{}'")
+-- Vicinae launcher. Replaces File Search on Alt+Space.
+-- Super+Space stays the Omarchy menu. vicinae.service owns the daemon.
+o.bind("ALT + SPACE", "Vicinae", "vicinae toggle")
 
 
 -- Ibara workstation panel. SUPER+I was free.
