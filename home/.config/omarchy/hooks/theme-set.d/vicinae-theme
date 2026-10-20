@@ -1,0 +1,42 @@
+#!/bin/bash
+# Copy the palette rendered from ~/.config/omarchy/themed/vicinae.toml.tpl
+# into Vicinae's theme directory and select it. Both appearance slots point
+# at that file, so a later light or dark Omarchy theme still wins.
+set -euo pipefail
+
+theme_dir=${VICINAE_OMARCHY_THEME_DIR:-$HOME/.local/state/omarchy/current/theme}
+themes_dir=${VICINAE_THEMES_DIR:-$HOME/.local/share/vicinae/themes}
+source_file=$theme_dir/vicinae.toml
+settings=$HOME/.config/vicinae/settings.json
+
+[[ -f $source_file && ! -L $source_file ]] || exit 0
+command -v vicinae >/dev/null || exit 0
+
+mkdir -p -- "$themes_dir"
+temporary=$(mktemp "$themes_dir/.omarchy.XXXXXX")
+trap 'rm -f -- "$temporary"' EXIT
+cp -- "$source_file" "$temporary"
+chmod 644 "$temporary"
+mv -f -- "$temporary" "$themes_dir/omarchy.toml"
+trap - EXIT
+
+vicinae theme set omarchy >/dev/null 2>&1 || true
+
+[[ -f $settings ]] || exit 0
+python3 - "$settings" <<'PY' || true
+import json, pathlib, re, sys
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+body = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+body = re.sub(r"(^|[^:])//.*?$", r"\1", body, flags=re.M)
+data = json.loads(body)
+theme = data.setdefault("theme", {})
+changed = False
+for slot in ("dark", "light"):
+    entry = theme.setdefault(slot, {})
+    if entry.get("name") != "omarchy":
+        entry["name"] = "omarchy"
+        changed = True
+if changed:
+    path.write_text(json.dumps(data, indent=3) + "\n")
+PY
