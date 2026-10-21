@@ -1,0 +1,151 @@
+#!/bin/bash
+# Point Serein at the active Omarchy palette. Theme selection is a device
+# preference in ~/.local/share/serein/extensions/themes/omarchy/.
+set -euo pipefail
+
+command -v serein >/dev/null || exit 0
+command -v omarchy-theme-color >/dev/null || exit 0
+
+root=${SEREIN_EXTENSIONS_DIR:-$HOME/.local/share/serein/extensions}
+theme_dir=$root/themes/omarchy
+package=$theme_dir/package.json
+active=$root/themes/active.json
+
+mapfile -t colors < <(omarchy-theme-color --all)
+(( ${#colors[@]} )) || exit 0
+
+record=$(python3 - "${colors[@]}" <<'PY'
+import hashlib, json, sys
+
+wanted = {}
+for line in sys.argv[1:]:
+    key, _, value = line.partition("\t")
+    if key and value.startswith("#") and len(value) == 7:
+        wanted[key] = value.lower()
+
+def need(name):
+    value = wanted.get(name)
+    if not value:
+        raise SystemExit(f"missing theme color {name}")
+    return value
+
+def channel(hex_color):
+    value = int(hex_color[1:], 16)
+    return (value >> 16) & 255, (value >> 8) & 255, value & 255
+
+def linear(channel):
+    value = channel / 255
+    if value <= 0.04045:
+        return value / 12.92
+    return ((value + 0.055) / 1.055) ** 2.4
+
+def luminance(hex_color):
+    red, green, blue = channel(hex_color)
+    return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
+
+def contrast(left, right):
+    lighter = max(luminance(left), luminance(right))
+    darker = min(luminance(left), luminance(right))
+    return (lighter + 0.05) / (darker + 0.05)
+
+def mix(start, end, amount):
+    left = channel(start)
+    right = channel(end)
+    mixed = [round(a * (1 - amount) + b * amount) for a, b in zip(left, right)]
+    return "#{:02x}{:02x}{:02x}".format(*mixed)
+
+def readable(background, choices):
+    return max(choices, key=lambda choice: contrast(background, choice))
+
+background = need("background")
+foreground = need("foreground")
+accent = need("accent")
+palette = {
+    "base": need("darker_background"),
+    "sidebar": need("dark_background"),
+    "chat": background,
+    "raised": need("lighter_background"),
+    "hover": mix(background, foreground, 0.08),
+    "selected": need("selection"),
+    "border": need("muted"),
+    "text_strong": foreground,
+    "text": need("light_foreground"),
+    "muted": need("dark_foreground"),
+    "link": wanted.get("cyan", accent),
+    "accent": accent,
+    "accent_text": readable(accent, [foreground, need("darker_background"), "#ffffff", "#111111"]),
+    "positive": need("green"),
+    "warning": need("yellow"),
+    "danger": need("red"),
+    "mention_bg": mix(background, accent, 0.22),
+}
+palette["mention_text"] = readable(
+    palette["mention_bg"],
+    [foreground, need("darker_background"), accent],
+)
+
+package = {
+    "manifest": {
+        "api_version": 1,
+        "id": "omarchy",
+        "name": "Omarchy",
+        "version": "1.0.0",
+        "author": "Omarchy",
+        "license": "MIT",
+        "source": "",
+        "kind": "theme",
+    },
+    "theme": {
+        "dark": {"colors": palette},
+        "light": {"colors": palette},
+        "style": {
+            "widget_radius": 0,
+            "window_radius": 0,
+            "menu_radius": 0,
+        },
+    },
+}
+encoded = json.dumps(package, separators=(",", ":")).encode()
+record = {
+    "local_theme": True,
+    "package": package,
+    "grants": [],
+    "reviewed": False,
+    "sha256": hashlib.sha256(encoded).hexdigest(),
+    "download_bytes": len(encoded),
+}
+json.dump(record, sys.stdout, indent=2)
+sys.stdout.write("\n")
+PY
+)
+
+if [[ -f $package ]] && cmp -s - "$package" <<<"$record"; then
+  exit 0
+fi
+
+mkdir -p -- "$theme_dir"
+temporary=$(mktemp "$theme_dir/.package.XXXXXX")
+trap 'rm -f -- "$temporary"' EXIT
+printf '%s\n' "$record" >"$temporary"
+chmod 644 "$temporary"
+mv -f -- "$temporary" "$package"
+trap - EXIT
+printf 'omarchy' >"$active"
+
+# Serein reads the active theme when it starts. Restart only a copy that is
+# already open, so a theme change does not launch it on its own.
+mapfile -t running < <(ps -u "$USER" -o pid=,args= | awk '$2 == "serein" || $2 == "/usr/bin/serein" { print $1 }')
+(( ${#running[@]} )) || exit 0
+kill -TERM "${running[@]}" 2>/dev/null || true
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  sleep 0.2
+  still=0
+  for pid in "${running[@]}"; do
+    kill -0 "$pid" 2>/dev/null && still=1
+  done
+  (( still == 0 )) && break
+done
+for pid in "${running[@]}"; do
+  kill -KILL "$pid" 2>/dev/null || true
+done
+setsid -f serein >/dev/null 2>&1 || true
