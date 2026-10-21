@@ -9,7 +9,9 @@ import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
+import qs.Ui as Ui
 import "NotificationLogic.js" as NotificationLogic
 import "ServiceBridge.js" as ServiceBridge
 import "components"
@@ -136,8 +138,16 @@ BarWidget {
     return (root.lit ? "󰂞" : "󱅫") + (root.liveCount > 9 ? "9+" : String(root.liveCount))
   }
 
-  readonly property color restColor: root.bar ? root.bar.barForeground : Color.foreground
-  readonly property color litColor: root.unseenCritical > 0 ? Color.urgent : Color.accent
+  readonly property color restColor: {
+    var fromBar = root.bar ? root.bar.barForeground : undefined
+    if (fromBar !== undefined && fromBar !== null) return fromBar
+    var bar = Commons.Color.bar
+    var fallback = (bar && bar.text !== undefined && bar.text !== null) ? bar.text : Commons.Color.foreground
+    return (fallback !== undefined && fallback !== null) ? fallback : "#a9b1d6"
+  }
+  readonly property color litColor: root.unseenCritical > 0
+    ? ((Commons.Color.urgent !== undefined && Commons.Color.urgent !== null) ? Commons.Color.urgent : "#a55555")
+    : root.colAccent
   readonly property color chipColor: root.lit || root.digestVisible ? root.litColor : root.restColor
 
   readonly property string autoDndText: {
@@ -155,12 +165,28 @@ BarWidget {
     return root.liveCount > 0 ? root.liveCount + " live notifications" : "Notification Center"
   }
 
-  // Theme palette (mirrors the old widget's tokens).
-  readonly property color colForeground: Color.foreground
-  readonly property color colDim: Qt.darker(Color.foreground, 1.4)
-  readonly property color colBorder: Style.normalBorderFor(Color.foreground, Color.accent)
-  readonly property color colSurface: Style.normalFillFor(Color.foreground, Color.accent)
-  readonly property color colAccent: Color.accent
+  // Same roles as the stock notification panel. Reading popups.text directly
+  // throws while the singleton is still coming up and the binding then stays
+  // on black, so missing roles fall through to the base palette.
+  readonly property color colForeground: {
+    var popups = Commons.Color.popups
+    if (popups && popups.text !== undefined && popups.text !== null)
+      return popups.text
+    var fallback = Commons.Color.foreground
+    return (fallback !== undefined && fallback !== null) ? fallback : "#a9b1d6"
+  }
+  readonly property color colDim: Qt.darker(colForeground, 1.4)
+  readonly property color colAccent: {
+    var value = Commons.Color.accent
+    return (value !== undefined && value !== null) ? value : "#7aa2f7"
+  }
+  readonly property color colPopupBg: {
+    var popups = Commons.Color.popups
+    if (popups && popups.background !== undefined && popups.background !== null)
+      return popups.background
+    var fallback = Commons.Color.background
+    return (fallback !== undefined && fallback !== null) ? fallback : "#1a1b26"
+  }
   readonly property int cardRadius: notificationService && notificationService.cornerRadius
     ? notificationService.cornerRadius : Style.cornerRadius
 
@@ -218,15 +244,20 @@ BarWidget {
       for (var i = 0; i < model.count; ++i) {
         var row = model.get(i)
         if (!row || !rowMatches(row)) continue
+        var liveSummary = String(row.summary || "").trim()
+        var liveBody = String(row.body || "").trim()
+        // An empty restored popup is not a message. Showing it as
+        // "Unknown application / Notification" hid the inbox.
+        if (!liveSummary && !liveBody) continue
         rows.push({
           isHeader: false,
           sourceIndex: i,
           isLive: true,
           id: row.id !== undefined ? row.id : null,
-          app: String(row.appName || row.app || "Unknown application"),
+          app: String(row.appName || row.app || "").trim(),
           appIcon: String(row.appIcon || ""),
-          summary: String(row.summary || "Notification"),
-          body: String(row.body || ""),
+          summary: liveSummary,
+          body: liveBody,
           glyph: String(row.glyph || NotificationLogic.glyphFromHints(row.hints)),
           herdrPane: String(row.herdrPane || ""),
           herdrSpace: String(row.herdrSpace || ""),
@@ -292,40 +323,119 @@ BarWidget {
     rebuildRows()
   }
 
-  function parseHistory(raw) {
+  // Enough of the inbox to read back through a morning, past the old
+  // ten-file cap. The list scrolls once the card hits its height cap.
+  readonly property int inboxLimit: 30
+
+  // ~/.local/state/omarchy/notifications/  (history/ is this plugin's old files)
+  readonly property string notificationStateDir: {
+    var dir = String(historyDir || "")
+    var mark = "history/"
+    if (dir.length > mark.length && dir.substring(dir.length - mark.length) === mark)
+      return dir.substring(0, dir.length - mark.length)
+    return ""
+  }
+  property var stockEntries: []
+  property var legacyEntries: []
+
+  function stockHistoryPath() {
+    return root.notificationStateDir.length > 0 ? root.notificationStateDir + "history.json" : ""
+  }
+
+  function historyTimestamp(value) {
+    var ts = Number(value.timestamp || value.ts || value.closed_ts || 0)
+    if (!isFinite(ts) || ts <= 0) return 0
+    // The 4.5 store keeps seconds. This plugin's own files keep milliseconds.
+    if (ts < 1e12) ts = Math.round(ts * 1000)
+    return ts
+  }
+
+  // A row with no title and no message is the blank file left at shell
+  // restart. Skip it. An empty app name stays empty so the title and body
+  // are what you read, rather than "Unknown application" / "Notification".
+  function historyEntryFrom(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null
+    var app = String(value.app || value.appName || value.source || "").trim()
+    var summary = String(value.summary || "").trim()
+    var body = String(value.body || value.rawBody || "").trim()
+    if (!summary && !body) return null
+    var herdr = NotificationLogic.isHerdrApp(app)
+    var id = value.key !== undefined && value.key !== "" ? value.key
+      : (value.id !== undefined ? value.id : (value.originalId !== undefined ? value.originalId : null))
+    return {
+      id: id,
+      app: app,
+      appIcon: String(value.appIcon || ""),
+      summary: summary,
+      body: body,
+      glyph: String(value.glyph || ""),
+      herdrPane: herdr ? NotificationLogic.herdrPaneId(value.herdrPane) : "",
+      herdrSpace: herdr ? NotificationLogic.herdrSpaceLabel(value.herdrSpace) : "",
+      urgency: Number(value.urgency === undefined ? 1 : value.urgency),
+      timestamp: root.historyTimestamp(value)
+    }
+  }
+
+  function entriesFromLines(raw) {
     var parsed = []
     var lines = String(raw || "").split("\n")
     for (var i = 0; i < lines.length; ++i) {
       var line = lines[i].trim()
       if (!line) continue
       try {
-        var value = JSON.parse(line)
-        if (!value || typeof value !== "object") continue
-        var app = String(value.app || "Unknown application")
-        var herdr = NotificationLogic.isHerdrApp(app)
-        parsed.push({
-          id: value.id !== undefined ? value.id : (value.originalId !== undefined ? value.originalId : null),
-          app: app,
-          appIcon: String(value.appIcon || ""),
-          summary: String(value.summary || "Notification"),
-          body: String(value.body || ""),
-          glyph: String(value.glyph || ""),
-          herdrPane: herdr ? NotificationLogic.herdrPaneId(value.herdrPane) : "",
-          herdrSpace: herdr ? NotificationLogic.herdrSpaceLabel(value.herdrSpace) : "",
-          urgency: Number(value.urgency === undefined ? 1 : value.urgency),
-          timestamp: Number(value.timestamp || 0)
-        })
+        var entry = root.historyEntryFrom(JSON.parse(line))
+        if (entry) parsed.push(entry)
       } catch (e) {
         // A torn write is ignored, matching the first-party parser.
       }
     }
+    return parsed
+  }
+
+  function entriesFromStock(raw) {
+    var parsed = []
+    var text = String(raw || "").trim()
+    if (!text) return parsed
+    try {
+      var data = JSON.parse(text)
+      if (!Array.isArray(data)) return parsed
+      for (var i = 0; i < data.length; ++i) {
+        var entry = root.historyEntryFrom(data[i])
+        if (entry) parsed.push(entry)
+      }
+    } catch (e) {
+      console.log("tyler.notifications history.json unreadable", text.length)
+    }
+    return parsed
+  }
+
+  function publishHistory() {
+    var parsed = []
+    var seen = {}
+    var sources = [root.stockEntries || [], root.legacyEntries || []]
+    for (var s = 0; s < sources.length; ++s) {
+      var list = sources[s]
+      for (var i = 0; i < list.length; ++i) {
+        var entry = list[i]
+        if (!entry) continue
+        var key = String(entry.id) + "|" + entry.timestamp + "|" + entry.summary
+        if (seen[key]) continue
+        seen[key] = true
+        parsed.push(entry)
+      }
+    }
     parsed.sort(function(a, b) { return b.timestamp - a.timestamp })
-    root.historyRows = parsed.slice(0, root.notificationService && root.notificationService.historyLimit
-      ? Number(root.notificationService.historyLimit) : 10)
+    root.historyRows = parsed.slice(0, root.inboxLimit)
     rebuildRows()
   }
 
+  function parseHistory(raw) {
+    root.legacyEntries = root.entriesFromLines(raw)
+    root.publishHistory()
+  }
+
   function refreshHistory() {
+    if (root.stockHistoryPath().length > 0) stockHistoryFile.reload()
     if (!root.historyDir || historyReader.running) return
     historyReader.command = ["bash", "-c",
       "awk 1 \"$1\"/*.json 2>/dev/null || true", "--", root.historyDir]
@@ -350,6 +460,20 @@ BarWidget {
     repeat: true
     running: root.popupOpen
     onTriggered: root.refreshHistory()
+  }
+
+  FileView {
+    id: stockHistoryFile
+    path: root.stockHistoryPath()
+    watchChanges: true
+    onLoaded: {
+      root.stockEntries = root.entriesFromStock(text())
+      root.publishHistory()
+    }
+    onLoadFailed: {
+      root.stockEntries = []
+      root.publishHistory()
+    }
   }
 
   Process {
@@ -436,10 +560,14 @@ BarWidget {
     open: root.popupOpen
     focusTarget: searchField
     contentWidth: popup.fittedContentWidth(Style.space(440))
-    contentHeight: popup.cappedContentHeight(Style.space(540))
+    contentHeight: popup.fittedContentHeight(inbox.implicitHeight, Style.space(520))
 
     ColumnLayout {
-      anchors.fill: parent
+      id: inbox
+      width: parent.width
+      anchors.top: parent.top
+      anchors.left: parent.left
+      anchors.right: parent.right
       spacing: Style.space(10)
 
       // ----------------------------------------- header
@@ -456,7 +584,7 @@ BarWidget {
         }
 
         Text {
-          text: (root.liveCount === 1 ? "1 notification" : root.liveCount + " notifications")
+          text: (root.matchCount === 1 ? "1 notification" : root.matchCount + " notifications")
             + (root.autoDnd && !root.dndOn ? " · holding (" + root.autoDndText + ")" : "")
           font.family: root.bar ? root.bar.fontFamily : ""
           color: root.colDim
@@ -471,8 +599,8 @@ BarWidget {
           Layout.preferredHeight: Math.max(Style.space(24), Style.font.bodySmall + Style.spacing.controlPaddingY * 2)
           Layout.preferredWidth: dndLabel.implicitWidth + dndGlyph.implicitWidth + Style.space(18)
           radius: Math.min(Style.space(12), root.cardRadius + Style.space(6))
-          color: root.dndOn ? root.colAccent : root.colSurface
-          borderSpec: Border.flat(root.dndOn ? root.colAccent : root.colBorder, Style.normalBorderWidth)
+          color: root.dndOn ? root.colAccent : Style.normalFillFor(root.colForeground, root.colAccent)
+          borderSpec: Border.controlSpec(root.dndOn ? "selected" : "normal", root.colForeground, root.colAccent)
 
           Row {
             anchors.centerIn: parent
@@ -482,7 +610,7 @@ BarWidget {
               id: dndGlyph
               text: root.dndOn ? "󰂛" : "󰂚"
               font.family: root.bar ? root.bar.fontFamily : ""
-              color: root.dndOn ? Color.background : root.colDim
+              color: root.dndOn ? root.colPopupBg : root.colDim
               font.pixelSize: Style.font.body
               anchors.verticalCenter: parent.verticalCenter
             }
@@ -491,7 +619,7 @@ BarWidget {
               id: dndLabel
               text: root.dndOn ? "DND on" : "DND off"
               font.family: root.bar ? root.bar.fontFamily : ""
-              color: root.dndOn ? Color.background : root.colDim
+              color: root.dndOn ? root.colPopupBg : root.colDim
               font.pixelSize: Style.font.caption
               font.bold: true
               anchors.verticalCenter: parent.verticalCenter
@@ -510,8 +638,8 @@ BarWidget {
           Layout.preferredWidth: Style.space(22)
           Layout.preferredHeight: Style.space(22)
           radius: Math.min(Style.space(6), root.cardRadius)
-          color: closeHeaderArea.containsMouse ? root.colBorder : "transparent"
-          borderSpec: Border.flat(root.colBorder, Style.normalBorderWidth)
+          color: Style.controlFill(false, closeHeaderArea.containsMouse, root.colForeground, root.colAccent)
+          borderSpec: Border.controlSpec(closeHeaderArea.containsMouse ? "hover" : "normal", root.colForeground, root.colAccent)
 
           Text {
             anchors.centerIn: parent
@@ -532,9 +660,12 @@ BarWidget {
       }
 
       // ----------------------------------------- search
-      TextField {
+      Ui.TextField {
         id: searchField
         Layout.fillWidth: true
+        foreground: root.colForeground
+        accent: root.colAccent
+        font.family: root.bar ? root.bar.fontFamily : Style.font.family
         placeholderText: "Search notifications"
         activeFocusOnPress: true
         onTextEdited: root.query = text
@@ -568,8 +699,8 @@ BarWidget {
           Layout.preferredWidth: clearLabel.implicitWidth + Style.space(16)
           Layout.preferredHeight: Math.max(Style.space(22), Style.font.bodySmall + Style.spacing.controlPaddingY * 2)
           radius: Math.min(Style.space(6), root.cardRadius)
-          color: clearArea.containsMouse ? root.colBorder : "transparent"
-          borderSpec: Border.flat(root.colBorder, Style.normalBorderWidth)
+          color: Style.controlFill(false, clearArea.containsMouse, root.colForeground, root.colAccent)
+          borderSpec: Border.controlSpec(clearArea.containsMouse ? "hover" : "normal", root.colForeground, root.colAccent)
 
           Text {
             id: clearLabel
@@ -594,9 +725,10 @@ BarWidget {
       ListView {
         id: listView
         Layout.fillWidth: true
-        Layout.fillHeight: true
+        Layout.preferredHeight: count > 0 ? Math.min(contentHeight, Style.space(380)) : 0
         clip: true
         spacing: Style.space(8)
+        boundsBehavior: Flickable.StopAtBounds
         model: root.filteredRows
         visible: count > 0
 
@@ -662,8 +794,8 @@ BarWidget {
             implicitHeight: rowContent.implicitHeight + Style.spacing.panelGap
             height: implicitHeight
             radius: root.cardRadius
-            color: "transparent"
-            borderSpec: Border.flat(root.colBorder, Style.normalBorderWidth)
+            color: Style.controlFill(false, rowHoverArea.containsMouse, root.colForeground, root.colAccent)
+            borderSpec: Border.controlSpec(rowHoverArea.containsMouse ? "hover" : "normal", root.colForeground, root.colAccent)
 
             // Left click dismisses, or opens the pane for a Herdr row. Hover
             // reveals a dedicated close (x) button that only dismisses.
@@ -688,7 +820,7 @@ BarWidget {
                 Layout.alignment: Qt.AlignTop
                 visible: rowCard.modelData.glyph !== ""
                 text: rowCard.modelData.glyph
-                color: rowCard.modelData.urgency === 2 ? Color.urgent : Color.accent
+                color: rowCard.modelData.urgency === 2 ? Commons.Color.urgent : root.colAccent
                 font.family: root.bar ? root.bar.fontFamily : ""
                 font.pixelSize: Style.font.icon
               }
@@ -754,15 +886,17 @@ BarWidget {
                   text: rowCard.sanitizedBody
                   textFormat: Text.PlainText
                   font.family: root.bar ? root.bar.fontFamily : ""
-                  color: root.colDim
-                  font.pixelSize: Style.font.bodySmall
+                  color: root.colForeground
+                  font.pixelSize: Style.font.body
                   wrapMode: Text.WordWrap
                   elide: Text.ElideRight
-                  maximumLineCount: rowCard.modelData.actions && rowCard.modelData.actions.length ? 6 : 3
+                  maximumLineCount: 8
                 }
 
                 NotificationActions {
                   Layout.fillWidth: true
+                  foreground: root.colForeground
+                  accent: root.colAccent
                   actions: rowCard.modelData.actions || []
                   onInvoked: identifier => root.notificationService.invokeInboxAction(rowCard.modelData, identifier)
                 }
@@ -775,7 +909,7 @@ BarWidget {
                 Layout.alignment: Qt.AlignVCenter
                 visible: rowHoverArea.containsMouse
                 radius: Math.min(4, root.cardRadius)
-                color: closeArea.containsMouse ? root.colBorder : "transparent"
+                color: closeArea.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : "transparent"
 
                 Text {
                   anchors.centerIn: parent
@@ -804,7 +938,7 @@ BarWidget {
       // ----------------------------------------- empty state
       Item {
         Layout.fillWidth: true
-        Layout.fillHeight: true
+        Layout.preferredHeight: listView.count === 0 ? Style.space(96) : 0
         visible: listView.count === 0
 
         ColumnLayout {
@@ -815,7 +949,7 @@ BarWidget {
             Layout.alignment: Qt.AlignHCenter
             text: "󰂚"
             font.family: root.bar ? root.bar.fontFamily : ""
-            color: root.colBorder
+            color: root.colDim
             font.pixelSize: Style.font.displayLarge
           }
 
@@ -834,10 +968,10 @@ BarWidget {
         Layout.fillWidth: true
         text: "Click dismisses (a Herdr row opens its pane) · ✕ dismisses · Esc closes"
         font.family: root.bar ? root.bar.fontFamily : ""
-        color: Qt.darker(root.colForeground, 1.55)
+        color: root.colDim
         font.pixelSize: Style.font.caption
         wrapMode: Text.WordWrap
-        horizontalAlignment: Text.AlignHCenter
+        horizontalAlignment: Text.AlignLeft
       }
     }
   }

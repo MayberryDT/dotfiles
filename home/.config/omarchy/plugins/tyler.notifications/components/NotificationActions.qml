@@ -6,6 +6,8 @@ import qs.Ui
 Flow {
   id: root
   property var actions: []
+  property color foreground: Color.popups.text
+  property color accent: Color.accent
   signal invoked(string identifier)
   spacing: Style.space(6)
   visible: actions.length > 0
@@ -21,7 +23,7 @@ Flow {
       contentItem: Text {
         text: parent.text
         textFormat: Text.PlainText
-        color: Color.foreground
+        color: root.foreground
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
         wrapMode: Text.Wrap
@@ -29,10 +31,12 @@ Flow {
       }
       background: BorderSurface {
         radius: Style.cornerRadius
-        color: parent.down ? Style.pressedFillFor(Color.foreground, Color.accent)
-          : parent.hovered || parent.activeFocus ? Style.hoverFillFor(Color.foreground, Color.accent)
-          : Style.normalFillFor(Color.foreground, Color.accent)
-        borderSpec: Border.flat(Color.accent, Style.normalBorderWidth)
+        color: parent.down ? Style.pressedFillFor(root.foreground, root.accent)
+          : Style.controlFill(parent.activeFocus, parent.hovered, root.foreground, root.accent)
+        borderSpec: Border.controlSpec(
+          parent.activeFocus ? "focus" : (parent.down || parent.hovered ? "hover" : "normal"),
+          root.foreground,
+          root.accent)
       }
     }
   }
