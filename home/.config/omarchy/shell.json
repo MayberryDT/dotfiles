@@ -4,19 +4,6 @@
     "layout": {
       "center": [
         {
-          "format": "dddd HH:mm",
-          "formatAlt": "d MMMM 'W'ww yyyy",
-          "id": "omarchy.clock",
-          "verticalFormat": "HH\n—\nmm"
-        }
-      ],
-      "centerBegin": [
-        {
-          "id": "omarchy.indicators"
-        }
-      ],
-      "centerEnd": [
-        {
           "id": "omarchy.elsewhen",
           "cities": [
             {
@@ -49,8 +36,14 @@
         },
         {
           "id": "tmn73.calendar",
-          "format": "dddd h:mm AP",
+          "format": "ddd d MMM HH:mm",
           "hiddenCalendars": []
+        },
+        {
+          "format": "dddd HH:mm",
+          "formatAlt": "d MMMM 'W'ww yyyy",
+          "id": "omarchy.clock",
+          "verticalFormat": "HH\n—\nmm"
         },
         {
           "id": "omarchy.weather"
@@ -62,6 +55,12 @@
           "id": "omarchy.media"
         }
       ],
+      "centerBegin": [
+        {
+          "id": "omarchy.indicators"
+        }
+      ],
+      "centerEnd": [],
       "left": [
         {
           "id": "io.github.corck.filesearch"
