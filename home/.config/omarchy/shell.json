@@ -1,63 +1,59 @@
 {
   "bar": {
-    "id": "tyler.bar",
-    "position": "top",
-    "transparent": true,
-    "centerAnchor": "tmn73.calendar",
+    "background": "opaque",
     "layout": {
-      "left": [
-        {
-          "id": "io.github.corck.filesearch"
-        },
-        {
-          "id": "io.github.nousd.omamin"
-        },
-        {
-          "id": "tyler.menu"
-        },
-        {
-          "id": "tyler.workspaces"
-        },
-        {
-          "id": "nixfred.pulse",
-          "barSource": "ram",
-          "cpu.displayMode": 0,
-          "ram.groupByApp": false
-        }
-      ],
       "center": [
         {
-          "id": "omarchy.keyboard-layout"
-        },
+          "format": "dddd HH:mm",
+          "formatAlt": "d MMMM 'W'ww yyyy",
+          "id": "omarchy.clock",
+          "verticalFormat": "HH\n—\nmm"
+        }
+      ],
+      "centerBegin": [
         {
-          "id": "omarchy.indicators",
-          "items": [
-            "ScreenRecording",
-            "Reminder",
-            "NightLight",
-            "Dnd",
-            "StayAwake"
+          "id": "omarchy.indicators"
+        }
+      ],
+      "centerEnd": [
+        {
+          "id": "omarchy.elsewhen",
+          "cities": [
+            {
+              "name": "Central",
+              "zone": "US/Central"
+            },
+            {
+              "name": "London",
+              "zone": "Europe/London"
+            },
+            {
+              "name": "Dubai",
+              "zone": "Asia/Dubai"
+            },
+            {
+              "name": "Tokyo",
+              "zone": "Asia/Tokyo"
+            },
+            {
+              "name": "Honolulu",
+              "zone": "Pacific/Honolulu"
+            }
           ]
-        },
-        {
-          "id": "lifetime.time-visualizer",
-          "defaultMode": "L",
-          "expectedYears": 100,
-          "lifeInputsExpanded": false
         },
         {
           "id": "omarchy.weather"
         },
         {
-          "id": "tmn73.calendar",
-          "format": "dddd h:mm AP",
-          "hiddenCalendars": []
-        },
-        {
           "id": "omarchy.system-update"
+        }
+      ],
+      "left": [
+        {
+          "id": "omarchy.menu"
         },
         {
-          "id": "omarchy.media"
+          "id": "omarchy.workspaces"
         }
       ],
       "right": [
@@ -65,34 +61,19 @@
           "id": "omarchy.tray"
         },
         {
-          "id": "io.github.tahadx.catch"
+          "id": "omarchy.tailscale"
         },
         {
-          "id": "tornikegomareli.talkify"
-        },
-        {
-          "id": "io.zet.ibara"
-        },
-        {
-          "id": "omaplug"
-        },
-        {
-          "id": "io.zet.todo-list"
-        },
-        {
-          "id": "co.animasai.rat-detective"
+          "id": "omarchy.keyboard-layout"
         },
         {
           "id": "omarchy.agents"
         },
         {
-          "id": "omarchy.network"
-        },
-        {
           "id": "omarchy.bluetooth"
         },
         {
-          "id": "io.github.nixfred.tailscale-host-monitor"
+          "id": "omarchy.network"
         },
         {
           "id": "omarchy.audio"
@@ -102,54 +83,20 @@
         },
         {
           "id": "omarchy.power"
-        },
-        {
-          "id": "omarchy.microphone"
-        },
-        {
-          "id": "tyler.scratchpad"
-        },
-        {
-          "id": "jankeesvw.meeting-recorder"
-        },
-        {
-          "id": "tyler.juice"
-        },
-        {
-          "id": "tyler.notifications"
         }
-      ]
+      ],
+      "tray": []
     },
-    "modes": {
-      "focus": {
-        "keep": [
-          "io.zet.ibara",
-          "omarchy.media",
-          "omarchy.workspaces",
-          "tyler.juice",
-          "tyler.media",
-          "tyler.notifications",
-          "tyler.workspaces"
-        ]
-      },
-      "meeting": {
-        "promote": [
-          "omarchy.microphone",
-          "jankeesvw.meeting-recorder",
-          "tmn73.calendar"
-        ],
-        "calendar": "tmn73.calendar",
-        "recorder": "jankeesvw.meeting-recorder"
-      },
-      "away": {
-        "minutes": 5,
-        "opacity": 0.15
-      }
-    }
+    "position": "top"
   },
-  "version": 1,
+  "cloneSourceRestores": [
+    "tyler.menu",
+    "tyler.nightlight"
+  ],
   "disabledPlugins": [
+    "omarchy.agents",
     "omarchy.menu",
+    "omarchy.nightlight",
     "omarchy.osd"
   ],
   "idle": {
@@ -174,9 +121,16 @@
     },
     {
       "id": "tyler.osd"
+    },
+    {
+      "id": "tyler.nightlight"
+    },
+    {
+      "id": "io.zet.helm"
+    },
+    {
+      "id": "io.github.erikrjohansson.machine-mark"
     }
   ],
-  "cloneSourceRestores": [
-    "tyler.menu"
-  ]
+  "version": 1
 }
