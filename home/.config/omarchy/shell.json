@@ -42,18 +42,47 @@
           ]
         },
         {
+          "id": "lifetime.time-visualizer",
+          "defaultMode": "L",
+          "expectedYears": 100,
+          "lifeInputsExpanded": false
+        },
+        {
+          "id": "tmn73.calendar",
+          "format": "dddd h:mm AP",
+          "hiddenCalendars": []
+        },
+        {
           "id": "omarchy.weather"
         },
         {
           "id": "omarchy.system-update"
+        },
+        {
+          "id": "omarchy.media"
         }
       ],
       "left": [
+        {
+          "id": "io.github.corck.filesearch"
+        },
+        {
+          "id": "io.github.nousd.omamin"
+        },
+        {
+          "id": "tyler.menu"
+        },
         {
           "id": "omarchy.menu"
         },
         {
           "id": "omarchy.workspaces"
+        },
+        {
+          "id": "nixfred.pulse",
+          "barSource": "ram",
+          "cpu.displayMode": 0,
+          "ram.groupByApp": false
         }
       ],
       "right": [
@@ -83,6 +112,42 @@
         },
         {
           "id": "omarchy.power"
+        },
+        {
+          "id": "io.zet.ibara"
+        },
+        {
+          "id": "io.github.tahadx.catch"
+        },
+        {
+          "id": "tornikegomareli.talkify"
+        },
+        {
+          "id": "io.zet.helm"
+        },
+        {
+          "id": "omaplug"
+        },
+        {
+          "id": "io.zet.todo-list"
+        },
+        {
+          "id": "co.animasai.rat-detective"
+        },
+        {
+          "id": "io.github.nixfred.tailscale-host-monitor"
+        },
+        {
+          "id": "omarchy.microphone"
+        },
+        {
+          "id": "jankeesvw.meeting-recorder"
+        },
+        {
+          "id": "tyler.juice"
+        },
+        {
+          "id": "tyler.notifications"
         }
       ],
       "tray": []
