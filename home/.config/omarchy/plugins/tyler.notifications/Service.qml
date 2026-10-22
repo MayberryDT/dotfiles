@@ -26,14 +26,13 @@ Item {
   // regeneratable cache that a `rm -rf ~/.cache` should wipe.
   readonly property string stateDir: home + "/.local/state/omarchy/"
   readonly property string settingsPath: stateDir + "notifications.json"
-  // One file per on-screen popup, so live toasts survive shell restarts.
-  // A file exists exactly as long as its popup is showing: written when the
-  // toast appears, moved into historyDir when it expires, is dismissed, or is
-  // acted upon.
+  // One file per live inbox row, so the inbox survives shell restarts. A
+  // file exists exactly as long as its row is live: written when the
+  // notification arrives, deleted when it is dismissed or acted upon, and
+  // moved into historyDir when the live cap pushes it out.
   readonly property string popupStateDir: stateDir + "notifications/"
-  // The notifications that already left the screen, one file each, trimmed to
-  // the newest historyLimit. This directory IS the history: `showHistory`
-  // replays exactly what has been moved in here.
+  // Rows the inbox still shows after they stopped being live (DND-silenced or
+  // pushed out by the cap), one file each, trimmed to the newest historyLimit.
   readonly property string historyDir: popupStateDir + "history/"
   // Copies of the avatars/images persisted entries reference — the sender's
   // originals don't outlive the notification (see persistablePopup). Each
@@ -113,9 +112,9 @@ Item {
   property alias popupModel: popupModel
   ListModel { id: popupModel }
 
-  // How many notifications the history directory keeps, and therefore how
-  // many `showHistory` can replay.
-  readonly property int historyLimit: 10
+  // How many notifications the history directory keeps: the ones DND
+  // silenced and the ones the live cap pushed out.
+  readonly property int historyLimit: 30
   // Live inbox cap when toasts are hidden and nothing auto-expires.
   readonly property int liveLimit: 30
   // Notifications belong in the bar inbox. On-screen toasts stay off.
@@ -693,12 +692,14 @@ Item {
     // id would dismiss that unrelated notification at the server.
     var restored = isRestoredRow(entry)
     var ref = !restored && originalId >= 0 ? liveRefs[originalId] : null
-    // The popup is leaving the screen — for any reason — so its file must not
-    // survive to the next shell restart. It becomes the newest history entry
-    // instead. Rows that never had a file (a history replay, the empty-history
-    // placeholder) archive to nothing, which the move tolerates.
+    // The popup is leaving the inbox, so its file must not survive to the
+    // next shell restart. A dismissed one is gone for good; one pushed out
+    // by the live cap becomes the newest history entry instead. Rows that
+    // never had a file (a history replay, the empty-history placeholder)
+    // archive to nothing, which the move tolerates.
     if (entry) {
-      archivePopupFileFor(entry)
+      if (reason === "expire") archivePopupFileFor(entry)
+      else deletePopupFileFor(entry)
       if (restored) delete restoredPopups[NotificationLogic.popupFileName(entry)]
     }
     popupModel.remove(index)
@@ -975,6 +976,15 @@ Item {
     for (var i = 0; i < persistable.copies.length; i++)
       command.push(persistable.copies[i].from, persistable.copies[i].to)
     enqueuePopupFileJob(command, done)
+  }
+
+  // One history row dismissed from the inbox. The name is the stem the row
+  // was written under (see imageStem), so its image copies go with it.
+  function removeHistoryEntry(row) {
+    if (!row) return
+    enqueuePopupFileJob(["bash", "-c",
+      "rm -f \"$1/$2.json\" \"$3/$2\"-*", "--",
+      historyDir, NotificationLogic.imageStem(row), imagesDir])
   }
 
   function clearHistory() {
@@ -1308,9 +1318,9 @@ Item {
       return dndState()
     }
 
-    // Replay the notifications that have been moved into the history dir.
+    // Notifications live in the bar inbox only, so "history" opens it.
     function showHistory(): string {
-      return service.showRecentHistory()
+      return service.panelCommand("open")
     }
 
     // `clear` forgets the recorded history; the toasts on screen stay put.

@@ -155,12 +155,14 @@
   },
   "cloneSourceRestores": [
     "tyler.menu",
-    "tyler.nightlight"
+    "tyler.nightlight",
+    "tyler.notifications"
   ],
   "disabledPlugins": [
     "omarchy.agents",
     "omarchy.menu",
     "omarchy.nightlight",
+    "omarchy.notifications",
     "omarchy.osd"
   ],
   "idle": {

@@ -31,8 +31,8 @@ BarWidget {
   property var filteredRows: []
   property var historyRows: []
 
-  // Locally-dismissed history entries, hidden until they drop out of the
-  // on-disk history on their own (see dismiss()).
+  // Dismissed history entries, hidden until the next read no longer finds
+  // their files (see dismiss()).
   property var hiddenHistoryKeys: ({})
   function historyKey(row) {
     if (row.id !== undefined && row.id !== null && row.id !== 0) return "id:" + row.id
@@ -228,6 +228,7 @@ BarWidget {
         sourceIndex: -1,
         isLive: false,
         id: history.id,
+        originalId: history.originalId,
         app: history.app,
         appIcon: history.appIcon,
         summary: history.summary,
@@ -305,7 +306,7 @@ BarWidget {
       next[key] = true
       root.hiddenHistoryKeys = next
       if (root.notificationService && typeof root.notificationService.removeHistoryEntry === "function")
-        root.notificationService.removeHistoryEntry(row.id)
+        root.notificationService.removeHistoryEntry(row)
     }
     rebuildRows()
   }
@@ -327,27 +328,10 @@ BarWidget {
   // ten-file cap. The list scrolls once the card hits its height cap.
   readonly property int inboxLimit: 30
 
-  // ~/.local/state/omarchy/notifications/  (history/ is this plugin's old files)
-  readonly property string notificationStateDir: {
-    var dir = String(historyDir || "")
-    var mark = "history/"
-    if (dir.length > mark.length && dir.substring(dir.length - mark.length) === mark)
-      return dir.substring(0, dir.length - mark.length)
-    return ""
-  }
-  property var stockEntries: []
-  property var legacyEntries: []
-
-  function stockHistoryPath() {
-    return root.notificationStateDir.length > 0 ? root.notificationStateDir + "history.json" : ""
-  }
-
+  // This plugin's history files, one JSON line each, timestamps in ms.
   function historyTimestamp(value) {
-    var ts = Number(value.timestamp || value.ts || value.closed_ts || 0)
-    if (!isFinite(ts) || ts <= 0) return 0
-    // The 4.5 store keeps seconds. This plugin's own files keep milliseconds.
-    if (ts < 1e12) ts = Math.round(ts * 1000)
-    return ts
+    var ts = Number(value.timestamp || 0)
+    return isFinite(ts) && ts > 0 ? ts : 0
   }
 
   // A row with no title and no message is the blank file left at shell
@@ -360,10 +344,9 @@ BarWidget {
     var body = String(value.body || value.rawBody || "").trim()
     if (!summary && !body) return null
     var herdr = NotificationLogic.isHerdrApp(app)
-    var id = value.key !== undefined && value.key !== "" ? value.key
-      : (value.id !== undefined ? value.id : (value.originalId !== undefined ? value.originalId : null))
     return {
-      id: id,
+      id: value.id !== undefined ? value.id : null,
+      originalId: value.originalId !== undefined ? value.originalId : 0,
       app: app,
       appIcon: String(value.appIcon || ""),
       summary: summary,
@@ -392,50 +375,14 @@ BarWidget {
     return parsed
   }
 
-  function entriesFromStock(raw) {
-    var parsed = []
-    var text = String(raw || "").trim()
-    if (!text) return parsed
-    try {
-      var data = JSON.parse(text)
-      if (!Array.isArray(data)) return parsed
-      for (var i = 0; i < data.length; ++i) {
-        var entry = root.historyEntryFrom(data[i])
-        if (entry) parsed.push(entry)
-      }
-    } catch (e) {
-      console.log("tyler.notifications history.json unreadable", text.length)
-    }
-    return parsed
-  }
-
-  function publishHistory() {
-    var parsed = []
-    var seen = {}
-    var sources = [root.stockEntries || [], root.legacyEntries || []]
-    for (var s = 0; s < sources.length; ++s) {
-      var list = sources[s]
-      for (var i = 0; i < list.length; ++i) {
-        var entry = list[i]
-        if (!entry) continue
-        var key = String(entry.id) + "|" + entry.timestamp + "|" + entry.summary
-        if (seen[key]) continue
-        seen[key] = true
-        parsed.push(entry)
-      }
-    }
+  function parseHistory(raw) {
+    var parsed = root.entriesFromLines(raw)
     parsed.sort(function(a, b) { return b.timestamp - a.timestamp })
     root.historyRows = parsed.slice(0, root.inboxLimit)
     rebuildRows()
   }
 
-  function parseHistory(raw) {
-    root.legacyEntries = root.entriesFromLines(raw)
-    root.publishHistory()
-  }
-
   function refreshHistory() {
-    if (root.stockHistoryPath().length > 0) stockHistoryFile.reload()
     if (!root.historyDir || historyReader.running) return
     historyReader.command = ["bash", "-c",
       "awk 1 \"$1\"/*.json 2>/dev/null || true", "--", root.historyDir]
@@ -460,20 +407,6 @@ BarWidget {
     repeat: true
     running: root.popupOpen
     onTriggered: root.refreshHistory()
-  }
-
-  FileView {
-    id: stockHistoryFile
-    path: root.stockHistoryPath()
-    watchChanges: true
-    onLoaded: {
-      root.stockEntries = root.entriesFromStock(text())
-      root.publishHistory()
-    }
-    onLoadFailed: {
-      root.stockEntries = []
-      root.publishHistory()
-    }
   }
 
   Process {
