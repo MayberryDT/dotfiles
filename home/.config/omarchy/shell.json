@@ -144,9 +144,6 @@
         },
         {
           "id": "tyler.juice"
-        },
-        {
-          "id": "tyler.notifications"
         }
       ],
       "tray": []
@@ -155,14 +152,12 @@
   },
   "cloneSourceRestores": [
     "tyler.menu",
-    "tyler.nightlight",
-    "tyler.notifications"
+    "tyler.nightlight"
   ],
   "disabledPlugins": [
     "omarchy.agents",
     "omarchy.menu",
     "omarchy.nightlight",
-    "omarchy.notifications",
     "omarchy.osd"
   ],
   "idle": {
@@ -181,9 +176,6 @@
     },
     {
       "id": "tyler.moments"
-    },
-    {
-      "id": "tyler.notifications"
     },
     {
       "id": "tyler.osd"
