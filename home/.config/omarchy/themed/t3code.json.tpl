@@ -19,6 +19,8 @@
     "input": "{{ muted }}",
     "muted": "{{ mix background foreground 5% }}",
     "secondary": "{{ mix background foreground 10% }}",
+    "messageSurface": "{{ mix background foreground 14% }}",
+    "messageForeground": "{{ foreground }}",
 
     "sidebar": "{{ dark_background }}",
     "sidebarForeground": "{{ foreground }}",
