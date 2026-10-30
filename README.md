@@ -12,7 +12,7 @@ backups, media, credentials, and third-party plugin source are excluded.
 - Custom hooks and the small `tyler.*` shell plugins
 - Alacritty, Foot, Ghostty, Kitty, and btop configuration
 - Brave Origin flags
-- Violet Current theme palette
+- Violet Current and Siege of Champions theme palettes
 
 The shell layout references separately installed community plugins. The active
 theme is recorded in `omarchy/current-theme.txt`; install themes and plugins
@@ -23,6 +23,11 @@ Violet Current's palette is included at
 is maintained separately and excluded from this configuration mirror, along
 with screenshots and personal portrait assets. Add your preferred backgrounds
 to `~/.config/omarchy/themes/violet-current/backgrounds/` before selecting it.
+
+The Siege of Champions palette is included at
+`home/.config/omarchy/themes/siege-of-champions/colors.toml`. Its game artwork
+is maintained separately and excluded from this public mirror; add backgrounds
+to `~/.config/omarchy/themes/siege-of-champions/backgrounds/` before selecting it.
 
 The dictation keybindings use `~/.local/bin/talkify-control` to record with
 Talkify and preserve independent local FLAC backups. The helper is included.
