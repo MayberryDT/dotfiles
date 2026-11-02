@@ -99,7 +99,7 @@ hl.config({
     column_width = 0.49,
   },
   dwindle = {
-    preserve_split = false,
+    preserve_split = true,
   },
   misc = {
     focus_on_activate = false,
