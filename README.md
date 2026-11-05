@@ -54,6 +54,9 @@ messages. The rest of the desktop sound packs are maintained separately.
 The clipboard keeper requires the Arch package `wl-clip-persist`. Hyprland
 starts it at login so copied content survives closing its source application.
 
+MouseHop pairing, host-specific settings, and its local Hyprland compatibility
+plugin are excluded from this public mirror.
+
 ## Layout
 
 Files under `home/` mirror paths relative to `$HOME`. Review every file before
